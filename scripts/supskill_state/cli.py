@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_show(subparsers)
     _add_artifact(subparsers)
     _add_gate(subparsers)
+    _add_block(subparsers)
     return parser
 
 
@@ -90,6 +91,28 @@ def _add_gate(subparsers) -> None:
 def _cmd_gate(args) -> int:
     commands.record_gate(args.gate_id, args.decision, args.response)
     print(f"recorded {args.gate_id}: {args.decision}")
+    return 0
+
+
+def _add_block(subparsers) -> None:
+    sub = subparsers.add_parser("block", help="record a structured blocker and mark its task BLOCKED")
+    sub.add_argument("--task", required=True, dest="task_id")
+    sub.add_argument("--kind", required=True)
+    sub.add_argument("--found", required=True, help="what was actually observed")
+    sub.add_argument(
+        "--option",
+        action="append",
+        default=[],
+        dest="options",
+        help="a labeled alternative like '(a) ...'; repeat the flag (at least twice)",
+    )
+    sub.add_argument("--recommend", required=True, help="the recommended option, e.g. '(a) - because ...'")
+    sub.set_defaults(func=_cmd_block)
+
+
+def _cmd_block(args) -> int:
+    commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
+    print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
     return 0
 
 

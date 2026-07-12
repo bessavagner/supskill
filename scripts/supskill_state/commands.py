@@ -10,6 +10,7 @@ silently not happened.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from .model import (
     ENTRY_STAGES,
     GATE_DECISIONS,
     GATE_KEYS,
+    Blocker,
     SprintInfo,
     Stage,
     State,
@@ -178,4 +180,63 @@ def record_gate(gate_id: str, decision: str, response: str, root: Path | None = 
     store.append_jsonl(store.gates_path(root), record)  # trail FIRST
     state.gates[GATE_KEYS[gate_id]] = decision  # last decision wins in state
     store.dump_state(state, store.state_path(root))  # state SECOND
+    return state
+
+
+_OPTION_LABEL = re.compile(r"^\(([a-z0-9]+)\)")
+
+
+def record_blocker(
+    task_id: str,
+    kind: str,
+    found: str,
+    options: list[str],
+    recommend: str,
+    root: Path | None = None,
+) -> State:
+    root = Path(root) if root is not None else Path.cwd()
+    # validate the whole record BEFORE touching disk: a rejected record writes nothing anywhere
+    for flag, value in (("--task", task_id), ("--kind", kind), ("--found", found), ("--recommend", recommend)):
+        if not value:
+            raise StateError(f"a blocker record requires a non-empty {flag}")
+    if len(options) < 2:
+        raise StateError(
+            "a blocker must enumerate at least two --option entries - "
+            "a single option is a fait accompli, not a decision"
+        )
+    labels: list[str] = []
+    for option in options:
+        match = _OPTION_LABEL.match(option)
+        if match is None:
+            raise StateError(f"every option must start with a label like '(a) ...': {option!r}")
+        if match.group(1) in labels:
+            raise StateError(f"duplicate option label ({match.group(1)})")
+        labels.append(match.group(1))
+    recommend_match = _OPTION_LABEL.match(recommend)
+    if recommend_match is None or recommend_match.group(1) not in labels:
+        raise StateError(
+            "recommend must reference one of the options by its label, e.g. '(a) - because ...'"
+        )
+
+    state = store.load_state(store.state_path(root))
+    task = next((t for t in state.tasks if t.id == task_id), None)
+    if task is None:
+        raise StateError(f"no task {task_id!r} in state.json - a blocker must attach to a known task")
+
+    blocker = Blocker(task=task_id, kind=kind, found=found, options=list(options), recommend=recommend)
+    blockers_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "blockers.jsonl"
+    store.append_jsonl(  # trail FIRST
+        blockers_file,
+        {
+            "task": blocker.task,
+            "kind": blocker.kind,
+            "found": blocker.found,
+            "options": list(blocker.options),
+            "recommend": blocker.recommend,
+            "at": store.now_utc_iso(),
+        },
+    )
+    state.blockers.append(blocker)  # mirror into state
+    task.status = TaskStatus.BLOCKED  # flip the task
+    store.dump_state(state, store.state_path(root))  # one atomic state write, SECOND
     return state
