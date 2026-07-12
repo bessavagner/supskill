@@ -66,3 +66,15 @@ def test_cli_show_happy_path(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["show"]) == 0
     assert "stage SCOPE" in capsys.readouterr().out
+
+
+def test_show_tolerates_a_crash_torn_trailing_gate_line(tmp_path):
+    init_sprint("s1", root=tmp_path)
+    append_jsonl(
+        gates_path(tmp_path),
+        {"gate": "G1", "decision": "approved", "response": "yes", "at": "2026-07-12T18:00:00+00:00"},
+    )
+    with open(gates_path(tmp_path), "a", encoding="utf-8") as handle:  # simulate a torn append
+        handle.write('{"gate": "G2", "decision": "appr')
+    output = render_show(tmp_path)
+    assert '"yes"' in output  # the readable prefix still renders

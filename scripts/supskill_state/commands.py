@@ -143,7 +143,10 @@ def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
     for line in gates_file.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        record = json.loads(line)
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue  # a crash-torn tail must not take down show; skip it
         key = GATE_KEYS.get(record.get("gate"))
         if key is not None:
             responses[key] = record.get("response", "")
