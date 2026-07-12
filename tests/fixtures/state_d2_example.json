@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "backlog": "docs/plans/sprints/backlog-02/backlog.md",
+  "sprint": {
+    "id": "S10",
+    "slug": "alerting-spine",
+    "entry": "SCOPE",
+    "branch": "feat/e10-alerting-spine",
+    "scratch": ".superpowers/sdd/s10/"
+  },
+  "stage": "REFINE",
+  "artifacts": {
+    "sprint_doc": "docs/plans/sprints/backlog-02/sprint-10-alerting-spine.md",
+    "dev_plan": null
+  },
+  "gates": {
+    "G1_sprint_doc": null,
+    "G2_plan": null,
+    "G3_review": null
+  },
+  "tasks": [
+    {
+      "id": "T3",
+      "seam": "e2e",
+      "provable": "operator",
+      "status": "BLOCKED"
+    }
+  ],
+  "blockers": [
+    {
+      "task": "T3",
+      "kind": "needs-live-capture",
+      "found": "entity parser returns 0 posts on all 23 profile reads",
+      "options": [
+        "(a) operator drives a live capture now",
+        "(b) defer to next sprint, proceed with the other 4 tasks",
+        "(c) re-scope: the drift hypothesis may be wrong"
+      ],
+      "recommend": "(a) - the drift detector's heuristic may be firing misleadingly"
+    }
+  ]
+}
