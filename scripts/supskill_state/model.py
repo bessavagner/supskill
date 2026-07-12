@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 
 from .errors import StateError
 
 SCHEMA_VERSION = 1
 
 
-class Stage(StrEnum):
+class Stage(str, Enum):  # noqa: UP042
     SCOPE = "SCOPE"
     REFINE = "REFINE"
     PLAN = "PLAN"
@@ -42,7 +42,7 @@ STAGE_ORDER: tuple[Stage, ...] = (
 ENTRY_STAGES: frozenset[Stage] = frozenset((Stage.SCOPE, Stage.PLAN, Stage.EXECUTE))
 
 
-class TaskStatus(StrEnum):
+class TaskStatus(str, Enum):  # noqa: UP042
     PENDING = "PENDING"
     DONE = "DONE"
     DONE_WITH_CONCERNS = "DONE_WITH_CONCERNS"
