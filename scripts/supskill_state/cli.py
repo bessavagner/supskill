@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_init(subparsers)
     _add_show(subparsers)
+    _add_artifact(subparsers)
     return parser
 
 
@@ -61,6 +62,19 @@ def _add_show(subparsers) -> None:
 
 def _cmd_show(args) -> int:
     print(commands.render_show(), end="")
+    return 0
+
+
+def _add_artifact(subparsers) -> None:
+    sub = subparsers.add_parser("artifact", help="record a stage's produced artifact path")
+    sub.add_argument("--set", required=True, choices=["sprint_doc", "dev_plan"], dest="name")
+    sub.add_argument("--path", required=True, help="path to the produced artifact (must exist)")
+    sub.set_defaults(func=_cmd_artifact)
+
+
+def _cmd_artifact(args) -> int:
+    state = commands.record_artifact(args.name, args.path)
+    print(f"recorded artifacts.{args.name} = {state.artifacts[args.name]}")
     return 0
 
 

@@ -144,3 +144,17 @@ def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
         if key is not None:
             responses[key] = record.get("response", "")
     return responses
+
+
+def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
+    root = Path(root) if root is not None else Path.cwd()
+    if name not in ARTIFACT_KEYS:
+        raise StateError(f"unknown artifact {name!r}; expected one of {list(ARTIFACT_KEYS)}")
+    if not file_path:
+        raise StateError("artifact path must not be empty")
+    if not (root / file_path).exists():
+        raise StateError(f"artifact file not found: {file_path}")
+    state = store.load_state(store.state_path(root))
+    state.artifacts[name] = file_path
+    store.dump_state(state, store.state_path(root))
+    return state
