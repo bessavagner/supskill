@@ -28,6 +28,7 @@ from .model import (
     TaskStatus,
 )
 from .scratch import derive_scratch, normalize_sprint_id
+from .transitions import failed_preconditions, next_stage
 
 
 def init_sprint(
@@ -239,4 +240,29 @@ def record_blocker(
     state.blockers.append(blocker)  # mirror into state
     task.status = TaskStatus.BLOCKED  # flip the task
     store.dump_state(state, store.state_path(root))  # one atomic state write, SECOND
+    return state
+
+
+def advance_stage(to: str, root: Path | None = None) -> State:
+    root = Path(root) if root is not None else Path.cwd()
+    try:
+        target = Stage(to)
+    except ValueError:
+        raise StateError(
+            f"unknown stage {to!r}; expected one of {[s.value for s in Stage]}"
+        ) from None
+    state = store.load_state(store.state_path(root))
+    expected = next_stage(state.stage)
+    if expected is None:
+        raise StateError(f"{state.stage.value} is the final stage; there is nothing to advance to")
+    if target is not expected:
+        raise StateError(
+            f"advance is one-step-forward only: from {state.stage.value} the only legal "
+            f"target is {expected.value}; --to {target.value} refused"
+        )
+    failures = failed_preconditions(state, target, root)
+    if failures:
+        raise StateError(f"cannot advance to {target.value}: " + "; ".join(failures))
+    state.stage = target
+    store.dump_state(state, store.state_path(root))
     return state

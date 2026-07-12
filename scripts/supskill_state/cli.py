@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_artifact(subparsers)
     _add_gate(subparsers)
     _add_block(subparsers)
+    _add_advance(subparsers)
     return parser
 
 
@@ -113,6 +114,19 @@ def _add_block(subparsers) -> None:
 def _cmd_block(args) -> int:
     commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
     print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
+    return 0
+
+
+def _add_advance(subparsers) -> None:
+    sub = subparsers.add_parser("advance", help="advance one stage forward, if preconditions hold")
+    sub.add_argument("--to", required=True, dest="to", metavar="STAGE",
+                     help="target stage (must be the next stage in SCOPE-REFINE-PLAN-EXECUTE-REVIEW)")
+    sub.set_defaults(func=_cmd_advance)
+
+
+def _cmd_advance(args) -> int:
+    state = commands.advance_stage(args.to)
+    print(f"advanced to {state.stage.value}")
     return 0
 
 
