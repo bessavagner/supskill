@@ -18,6 +18,7 @@ from .errors import StateError
 from .model import (
     ARTIFACT_KEYS,
     ENTRY_STAGES,
+    GATE_DECISIONS,
     GATE_KEYS,
     SprintInfo,
     Stage,
@@ -157,4 +158,24 @@ def record_artifact(name: str, file_path: str, root: Path | None = None) -> Stat
     state = store.load_state(store.state_path(root))
     state.artifacts[name] = file_path
     store.dump_state(state, store.state_path(root))
+    return state
+
+
+def record_gate(gate_id: str, decision: str, response: str, root: Path | None = None) -> State:
+    root = Path(root) if root is not None else Path.cwd()
+    if gate_id not in GATE_KEYS:
+        raise StateError(f"unknown gate {gate_id!r}; expected one of {sorted(GATE_KEYS)}")
+    if decision not in GATE_DECISIONS:
+        raise StateError(f"unknown decision {decision!r}; expected one of {list(GATE_DECISIONS)}")
+    # load (and thereby validate) state BEFORE writing the trail, so a refusal writes nothing
+    state = store.load_state(store.state_path(root))
+    record = {
+        "gate": gate_id,
+        "decision": decision,
+        "response": response,  # verbatim; empty is accepted and recorded by design (F-4)
+        "at": store.now_utc_iso(),
+    }
+    store.append_jsonl(store.gates_path(root), record)  # trail FIRST
+    state.gates[GATE_KEYS[gate_id]] = decision  # last decision wins in state
+    store.dump_state(state, store.state_path(root))  # state SECOND
     return state

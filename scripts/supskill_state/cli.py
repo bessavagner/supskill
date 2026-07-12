@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_init(subparsers)
     _add_show(subparsers)
     _add_artifact(subparsers)
+    _add_gate(subparsers)
     return parser
 
 
@@ -75,6 +76,20 @@ def _add_artifact(subparsers) -> None:
 def _cmd_artifact(args) -> int:
     state = commands.record_artifact(args.name, args.path)
     print(f"recorded artifacts.{args.name} = {state.artifacts[args.name]}")
+    return 0
+
+
+def _add_gate(subparsers) -> None:
+    sub = subparsers.add_parser("gate", help="record a gate decision with the operator's verbatim words")
+    sub.add_argument("--id", required=True, choices=["G1", "G2", "G3"], dest="gate_id")
+    sub.add_argument("--decision", required=True, choices=["approved", "rejected"])
+    sub.add_argument("--response", required=True, help="the operator's verbatim response (may be empty)")
+    sub.set_defaults(func=_cmd_gate)
+
+
+def _cmd_gate(args) -> int:
+    commands.record_gate(args.gate_id, args.decision, args.response)
+    print(f"recorded {args.gate_id}: {args.decision}")
     return 0
 
 
