@@ -10,6 +10,7 @@ silently not happened.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 from . import store
@@ -21,6 +22,7 @@ from .model import (
     SprintInfo,
     Stage,
     State,
+    TaskStatus,
 )
 from .scratch import derive_scratch, normalize_sprint_id
 
@@ -91,3 +93,54 @@ def _archive_existing(root: Path) -> Path:
     if old_gates.exists():
         old_gates.rename(destination / "gates.jsonl")
     return destination
+
+
+def render_show(root: Path | None = None) -> str:
+    root = Path(root) if root is not None else Path.cwd()
+    state = store.load_state(store.state_path(root))
+    responses = _last_gate_responses(root)
+
+    slug = f" ({state.sprint.slug})" if state.sprint.slug else ""
+    lines = [
+        f"sprint {state.sprint.id}{slug} - stage {state.stage.value} "
+        f"(entered at {state.sprint.entry.value})",
+        "gates:",
+    ]
+    for cli_id, key in GATE_KEYS.items():
+        decision = state.gates[key] if state.gates[key] is not None else "-"
+        line = f"  {cli_id} {key}: {decision}"
+        if key in responses:
+            line += f'  response: "{responses[key]}"'
+        lines.append(line)
+
+    counts = Counter(task.status for task in state.tasks)
+    by_status = ", ".join(
+        f"{counts[status]} {status.value}" for status in TaskStatus if counts[status]
+    )
+    lines.append(f"tasks: {len(state.tasks)} total" + (f" - {by_status}" if by_status else ""))
+
+    if state.blockers:
+        lines.append("open blockers:")
+        for blocker in state.blockers:
+            lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
+            for option in blocker.options:
+                lines.append(f"      {option}")
+            lines.append(f"    recommend: {blocker.recommend}")
+    else:
+        lines.append("open blockers: none")
+    return "\n".join(lines) + "\n"
+
+
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    gates_file = store.gates_path(root)
+    responses: dict[str, str] = {}
+    if not gates_file.exists():
+        return responses
+    for line in gates_file.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        key = GATE_KEYS.get(record.get("gate"))
+        if key is not None:
+            responses[key] = record.get("response", "")
+    return responses

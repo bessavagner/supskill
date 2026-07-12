@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_init(subparsers)
+    _add_show(subparsers)
     return parser
 
 
@@ -50,6 +51,16 @@ def _cmd_init(args) -> int:
         f"initialized sprint {state.sprint.id} at {state.stage.value} "
         f"(scratch: {state.sprint.scratch})"
     )
+    return 0
+
+
+def _add_show(subparsers) -> None:
+    sub = subparsers.add_parser("show", help="print stage, gates, task counts, open blockers")
+    sub.set_defaults(func=_cmd_show)
+
+
+def _cmd_show(args) -> int:
+    print(commands.render_show(), end="")
     return 0
 
 
