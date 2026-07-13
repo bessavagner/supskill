@@ -60,11 +60,12 @@ def _cmd_init(args) -> int:
 
 def _add_show(subparsers) -> None:
     sub = subparsers.add_parser("show", help="print stage, gates, task counts, open blockers")
+    sub.add_argument("--json", action="store_true", help="print the full state as JSON (the resume contract)")
     sub.set_defaults(func=_cmd_show)
 
 
 def _cmd_show(args) -> int:
-    print(commands.render_show(), end="")
+    print(commands.render_show_json() if args.json else commands.render_show(), end="")
     return 0
 
 

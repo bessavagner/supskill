@@ -1,7 +1,9 @@
 """SK-002: show answers "what stage, what did the gates say, what's blocked" at a glance."""
 
+import json
+
 from supskill_state.cli import main
-from supskill_state.commands import init_sprint, render_show
+from supskill_state.commands import init_sprint, record_artifact, render_show, render_show_json
 from supskill_state.model import Blocker, Task, TaskStatus
 from supskill_state.store import append_jsonl, dump_state, gates_path, load_state, state_path
 
@@ -78,3 +80,38 @@ def test_show_tolerates_a_crash_torn_trailing_gate_line(tmp_path):
         handle.write('{"gate": "G2", "decision": "appr')
     output = render_show(tmp_path)
     assert '"yes"' in output  # the readable prefix still renders
+
+
+def test_show_prints_backlog_and_recorded_artifacts(tmp_path):
+    init_sprint("s1", backlog="docs/backlog.md", root=tmp_path)
+    (tmp_path / "sprint-doc.md").write_text("spec\n", encoding="utf-8")
+    record_artifact("sprint_doc", "sprint-doc.md", root=tmp_path)
+    output = render_show(tmp_path)
+    assert "backlog: docs/backlog.md" in output
+    assert "artifacts:" in output
+    assert "sprint_doc: sprint-doc.md" in output
+    assert "dev_plan: -" in output  # unset renders as a dash, same idiom as gates
+
+
+def test_show_marks_missing_backlog_with_a_dash(tmp_path):
+    init_sprint("s1", root=tmp_path)
+    output = render_show(tmp_path)
+    assert "backlog: -" in output
+    assert "sprint_doc: -" in output
+
+
+def test_show_json_round_trips_against_the_state_file(tmp_path):
+    _state_with_activity(tmp_path)
+    output = render_show_json(tmp_path)
+    assert json.loads(output) == json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+
+
+def test_cli_show_json(tmp_path, monkeypatch, capsys):
+    _state_with_activity(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["show", "--json"]) == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["stage"] == "SCOPE"
+    assert parsed["sprint"]["id"] == "s1"
+    assert set(parsed["artifacts"]) == {"sprint_doc", "dev_plan"}
+    assert parsed["backlog"] is None

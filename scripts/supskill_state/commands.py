@@ -26,6 +26,7 @@ from .model import (
     Stage,
     State,
     TaskStatus,
+    state_to_dict,
 )
 from .scratch import derive_scratch, normalize_sprint_id
 from .transitions import failed_preconditions, next_stage
@@ -108,8 +109,12 @@ def render_show(root: Path | None = None) -> str:
     lines = [
         f"sprint {state.sprint.id}{slug} - stage {state.stage.value} "
         f"(entered at {state.sprint.entry.value})",
-        "gates:",
+        f"backlog: {state.backlog or '-'}",
+        "artifacts:",
     ]
+    for key in ARTIFACT_KEYS:
+        lines.append(f"  {key}: {state.artifacts[key] or '-'}")
+    lines.append("gates:")
     for cli_id, key in GATE_KEYS.items():
         decision = state.gates[key] if state.gates[key] is not None else "-"
         line = f"  {cli_id} {key}: {decision}"
@@ -133,6 +138,17 @@ def render_show(root: Path | None = None) -> str:
     else:
         lines.append("open blockers: none")
     return "\n".join(lines) + "\n"
+
+
+def render_show_json(root: Path | None = None) -> str:
+    """The resume read-contract: the full state as JSON.
+
+    The conductor's dispatch consumes this instead of parsing state.json
+    itself - the schema stays the CLI's concern, never skill prose's.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    state = store.load_state(store.state_path(root))
+    return json.dumps(state_to_dict(state), indent=2) + "\n"
 
 
 def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
