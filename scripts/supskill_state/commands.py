@@ -25,9 +25,11 @@ from .model import (
     SprintInfo,
     Stage,
     State,
+    Task,
     TaskStatus,
     state_to_dict,
 )
+from .proofs import parse_proof_lines
 from .scratch import derive_scratch, normalize_sprint_id
 from .transitions import failed_preconditions, next_stage
 
@@ -265,6 +267,50 @@ def record_blocker(
     state.blockers.append(blocker)  # mirror into state
     task.status = TaskStatus.BLOCKED  # flip the task
     store.dump_state(state, store.state_path(root))  # one atomic state write, SECOND
+    return state
+
+
+def load_tasks(
+    doc: str,
+    *,
+    plan: str | None = None,
+    root: Path | None = None,
+) -> State:
+    """Load tasks[] from a sprint doc's proof lines (SK-033).
+
+    proofs.py is the single vocabulary owner: this verb parses NOTHING itself.
+    Tasks are story-shaped (SK-0xx), which is why a dev plan's task headings must
+    name the story they serve - that heading is the only join between what SDD
+    reports (Task N) and what state tracks (SK-0xx).
+
+    Non-destructive: a reload that would reset progress refuses instead. The
+    operator who really wants a fresh load has `init --archive`; this verb never
+    runs it.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    doc_path = root / doc
+    if not doc_path.is_file():
+        raise StateError(f"no such doc: {doc}")
+    proofs = parse_proof_lines(doc_path.read_text(encoding="utf-8"))
+    if not proofs:
+        raise StateError(
+            f"no proof lines in {doc}: there is nothing to load "
+            "(a refined sprint doc carries one proof line per story)"
+        )
+
+    state = store.load_state(store.state_path(root))
+    started = [task.id for task in state.tasks if task.status is not TaskStatus.PENDING]
+    if started:
+        raise StateError(
+            "tasks[] already carries progress (" + ", ".join(started) + "); refusing to reset it. "
+            "A fresh load is an operator decision: archive the run with init --archive"
+        )
+
+    state.tasks = [
+        Task(id=proof.story, seam=proof.seam, provable=proof.provable, status=TaskStatus.PENDING)
+        for proof in proofs
+    ]
+    store.dump_state(state, store.state_path(root))
     return state
 
 

@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_artifact(subparsers)
     _add_gate(subparsers)
     _add_block(subparsers)
+    _add_tasks(subparsers)
     _add_advance(subparsers)
     return parser
 
@@ -115,6 +116,20 @@ def _add_block(subparsers) -> None:
 def _cmd_block(args) -> int:
     commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
     print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
+    return 0
+
+
+def _add_tasks(subparsers) -> None:
+    sub = subparsers.add_parser("tasks", help="load tasks[] from a refined sprint doc's proof lines")
+    sub.add_argument("--from", required=True, dest="doc", metavar="DOC",
+                     help="the refined sprint doc; its proof lines are the task list")
+    sub.add_argument("--plan", help="the dev plan; every story must be named by a '### Task N ... (SK-0xx)' heading")
+    sub.set_defaults(func=_cmd_tasks)
+
+
+def _cmd_tasks(args) -> int:
+    state = commands.load_tasks(args.doc, plan=args.plan)
+    print(f"loaded {len(state.tasks)} tasks: " + ", ".join(task.id for task in state.tasks))
     return 0
 
 
