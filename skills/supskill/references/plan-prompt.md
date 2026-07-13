@@ -32,11 +32,10 @@ Three facts about your situation, stated up front because they are structural:
   `superpowers:executing-plans`.** Do not implement, test, or commit anything.
   Write the plan, save it, report the path, and stop. A plan is a document; the
   stage that executes it is a different stage, behind a gate you cannot see.
-  The plan document's mandated header will not stop naming
-  `superpowers:subagent-driven-development` as its execution sub-skill, not by
-  your hand — leave that header exactly as `writing-plans` writes it, because
-  naming it there is not an instruction to you: it is for the conductor, at a
-  later stage, behind the same gate you cannot see.
+  Leave the plan's mandated header untouched: it will still name
+  `superpowers:subagent-driven-development`, and that is not a command to you —
+  it is `writing-plans`'s own text, meant for the conductor at a later stage,
+  behind a gate you cannot see.
 
 Your task:
 
