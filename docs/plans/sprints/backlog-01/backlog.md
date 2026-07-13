@@ -64,13 +64,13 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E1** | **The state spine** | Everything compounds on it, it is the only pure-Python unit-testable part, and it kills the scratch-dir ritual structurally. Do FIRST. | 18 | **M** |
 | **E2** | **Conductor skill + plugin skeleton** | The disposable conductor: invoke, read state, resume. Nothing runs without it. | 12 | **M** |
 | **E3** | **SCOPE + REFINE + Gate 1** | The refine-at-pull-time stage. The bridge (F-1) and the proof-seam classification that Gate/E5 depend on. **The heart.** | 23 | **M** |
-| **E4** | **PLAN + Gate 2** | Thin — mostly wiring `writing-plans` and intercepting its terminal question. | 10 | **M** |
+| **E4** | **PLAN + Gate 2** | Thin in code, sharp in consequence: wiring `writing-plans` and stopping it from executing the sprint it is planning. | 14 | **M** |
 | **E5** | **EXECUTE (drain-then-halt)** | Where autonomy actually pays, and where silent guessing must be made impossible. | 19 | **M** |
 | **E6** | **REVIEW (PAR) + Gate 3 + replan shapes** | The generative gate — the one that writes the next sprint. Highest value, highest complexity. | 23 | **M** |
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 124 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
+**Total: 128 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure.
 
@@ -116,14 +116,14 @@ the real SDD output format before committing points.
 exactly the kind of task an agent will do shallowly and report confidently (F-5). Consider PAR here
 too, not just at E6.
 
-## E4 — PLAN + Gate 2 (10 pts)
+## E4 — PLAN + Gate 2 (14 pts)
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
-| SK-030 | PLAN stage: dispatch `superpowers:writing-plans` with the refined sprint doc as the spec. | 3 | M | ☐ |
-| SK-031 | Intercept `writing-plans`' terminal question (Subagent-Driven vs Inline). It **ends by asking the user**; an unattended conductor stalls otherwise. Answer: subagent-driven, always. | 2 | M | ☐ |
+| SK-030 | PLAN stage: dispatch `superpowers:writing-plans` with the refined sprint doc as the spec. S4 DoR: the conductor supplies the output path (`writing-plans`' own convention is dated and not derivable from a doc it has not read); the plan's citations are audited before Gate 2; the stage is resume-idempotent; and every plan task heading must name the story it serves — the join key E5 maps SDD statuses through. | 4 | M | ☐ |
+| SK-031 | Intercept `writing-plans`' Execution Handoff. S4 DoR corrected this: it does **not** merely end by asking — each branch names a REQUIRED SUB-SKILL, so a headless plan agent can execute the entire sprint inside the PLAN stage, bypassing `advance --to EXECUTE`'s `G2_plan` precondition entirely while `state.json` still reads `PLAN`. Resolution, two layers: the template pre-answers *subagent-driven, always* and forbids both execution sub-skills (lint-asserted), and a HEAD-moved guard stops the run if the agent committed. The guard catches a committing agent, not an editing one — F-4's ceiling, stated. | 3 | M | ☐ |
 | SK-032 | Gate 2 (plan review) → `gates.jsonl`. | 2 | M | ☐ |
-| SK-033 | `supskill-state` verb that loads `tasks[]` (id, seam, provable, status=PENDING) from the refined sprint doc / dev plan into state. Today `init` writes `[]` and no verb adds tasks, while `block` requires the task to exist — without this, E5 cannot block, park, or map a single SDD status. (Proposed at S2 DoR, finding 6.) | 3 | M | ☐ |
+| SK-033 | `supskill-state tasks --from <doc>` loads `tasks[]` (id, seam, provable, status=PENDING) from the refined sprint doc's proof lines — `proofs.py` stays the only parser. **Enforcement, not plumbing** (S4 DoR finding 2): `advance --to REVIEW` refuses while any task is non-terminal, which over an empty `tasks[]` passed vacuously — so a sprint could reach REVIEW having executed nothing. The verb also adds empty-list refusals on `→ EXECUTE` and `→ REVIEW`, plus load-time coverage validation joining plan task headings to story ids. (Proposed at S2 DoR, finding 6; grown at S4 DoR.) | 5 | M | ☐ |
 
 ## E5 — EXECUTE, drain-then-halt (19 pts)
 
@@ -132,7 +132,7 @@ too, not just at E6.
 | SK-040 | Dispatch `superpowers:subagent-driven-development` with the derived scratch dir passed via the `OUTFILE` override that `task-brief` / `review-package` already accept. | 5 | M | ☐ |
 | SK-041 | **Drain-then-halt**: run every task that is neither `BLOCKED` nor downstream of a blocker; park the rest; then stop and escalate the batch. Target shape, not an error state. (**D4**) | 8 | M | ☐ |
 | SK-042 | Blocker records carry `options[]` + `recommend`. blinkebot's real S9a blocker is the fixture: the *recommended* option was wrong and option (c) was right — a bare "blocked" would have misled the operator. | 3 | M | ☐ |
-| SK-043 | Map SDD's `DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT` onto task status. `DONE_WITH_CONCERNS` proceeds but carries the concern to Gate 3. (**D5**) | 3 | M | ☐ |
+| SK-043 | Map SDD's `DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT` onto task status. `DONE_WITH_CONCERNS` proceeds but carries the concern to Gate 3. (**D5**) The join is the `SK-0xx` id in each plan task's heading, established by SK-030 and validated by SK-033: E5 adds no parser and invents no second id scheme. | 3 | M | ☐ |
 
 ## E6 — REVIEW (PAR) + Gate 3 + replan shapes (23 pts)
 
@@ -200,3 +200,12 @@ conductor would have silently self-approved its own gate (`AskUserQuestion`
 auto-resolves empty × `gate`'s by-design acceptance of empty responses), which
 no backlog one-liner mentioned. The refusal now lives in the conductor
 (SK-023). Three sprints, three data points, same direction. (Report §7.2)
+
+**Data point #4 (S4 DoR, 2026-07-13):** refinement against live source grew scope
++4 pts (10 → 14), and — for the fourth consecutive sprint — the sharpest finding
+was structural, not cosmetic: a headless PLAN stage could have executed the
+entire sprint before its own approval gate (`writing-plans`' Execution Handoff
+names a REQUIRED SUB-SKILL per branch), and an empty `tasks[]` made the spine's
+strongest precondition a no-op. Neither is visible from a backlog one-liner.
+Four sprints, four data points, same direction — §7.2 can be closed at E6 with
+the answer *the gate earns its keep because the refinement does*. (Report §7.2)
