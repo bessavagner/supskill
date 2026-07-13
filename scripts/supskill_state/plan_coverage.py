@@ -20,7 +20,7 @@ import re
 
 PROCESS_MARKER = "(process)"
 
-_TASK_HEADING = re.compile(r"^###\s+Task\s+\d+\b.*$")
+_TASK_HEADING = re.compile(r"^ {0,3}###\s+Task\s+\d+\b.*$")
 _STORY_ID = re.compile(r"SK-\d+")
 # A CommonMark fence line: 0-3 leading spaces, then a run of 3+ of the same
 # fence character (backtick or tilde), then the rest of the line (info string

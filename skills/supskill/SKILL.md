@@ -190,8 +190,13 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
 
 1. **Resume idempotence.** If `artifacts.dev_plan` is recorded AND the file
    exists, the plan was already written: skip the dispatch and the HEAD guard
-   entirely — do not re-dispatch, do not re-spend a plan run. Instead run
-   `artifact --set dev_plan --path <plan path>`, then
+   entirely — do not re-dispatch, do not re-spend a plan run. Instead, from the
+   repo root, run:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-audit <plan path>` — citations only,
+   **no `--proofs`**: a dev plan carries no proof lines. Exit 1 → report the
+   failures verbatim and stop; this is a hard failure, not advisory, so a
+   hand-edited plan is checked before it ever reaches the operator. Exit 0 →
+   run `artifact --set dev_plan --path <plan path>`, then
    `tasks --from <sprint doc path> --plan <plan path>` — the crash may have
    happened before tasks were loaded, and `tasks[]` must be populated before
    the gate — then continue at **Gate 2**.
@@ -256,10 +261,16 @@ nowhere else.
 4. `approved` → `advance --to EXECUTE` → continue at the `EXECUTE` dispatch row
    (E5's honest stub: it reports and stops — do not improvise EXECUTE).
 5. `rejected` → the decision is recorded and final for this pass; report it and
-   stop, naming the rework loop: the operator edits the plan directly or asks
-   for a fresh PLAN pass, then re-invokes `/supskill run <sprint-id>` and
-   re-gates. The last decision wins in state while every attempt stays in the
-   trail.
+   stop, naming the rework loop: PLAN's resume idempotence means re-invoking
+   `/supskill run <sprint-id>` with the rejected plan still recorded and still
+   on disk skips the dispatch and re-gates on the same file. So the operator
+   edits the recorded plan **at its path** directly, then re-invokes — the
+   conductor re-reads the edited file from disk and re-gates it. To force a
+   genuinely fresh PLAN run instead, the operator removes the recorded plan
+   file first, so the "recorded AND the file exists" condition fails and PLAN
+   dispatches again — that is the operator's call to make, never the
+   conductor's: the conductor never deletes an artifact. The last decision
+   wins in state while every attempt stays in the trail.
 
 ## Reference
 

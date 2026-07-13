@@ -162,3 +162,28 @@ def test_an_unclosed_fence_at_eof_swallows_trailing_real_headings_by_design_find
     # This is deliberate, documented behavior, not an accident - this test pins it.
     plan = "### Task 1: the verb (SK-030)\n```\nprose\n### Task 2: swallowed by unclosed fence (SK-031)\n"
     assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
+
+
+# SK-030 leading-whitespace tolerance (final whole-branch review, Fix 3): CommonMark
+# allows 0-3 leading spaces before a heading marker - _FENCE_LINE already allows this
+# for fence lines, but _TASK_HEADING did not, so an indented heading (e.g. nested in
+# list content) was silently dropped from plan_task_headings and its story falsely
+# reported as dropped by the plan.
+
+
+def test_a_heading_indented_up_to_three_spaces_is_still_a_real_heading():
+    plan = "   ### Task 1: the verb (SK-030)\n ### Task 2: the guard (SK-031)\n"
+    found = plan_task_headings(plan)
+    assert len(found) == 2
+    assert found[0].strip() == "### Task 1: the verb (SK-030)"
+    assert found[1].strip() == "### Task 2: the guard (SK-031)"
+    assert validate_plan_coverage(plan, STORIES) == []
+
+
+def test_a_heading_indented_four_or_more_spaces_is_an_indented_code_block_not_a_heading():
+    # Four leading spaces is CommonMark's indented-code-block threshold - this is not
+    # a heading, and treating it as one would false-accept a code sample as coverage.
+    plan = "### Task 1: the verb (SK-030)\n    ### Task 2: the guard (SK-031)\n"
+    assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
+    failures = validate_plan_coverage(plan, STORIES)
+    assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]
