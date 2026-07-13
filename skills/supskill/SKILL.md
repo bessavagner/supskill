@@ -189,9 +189,12 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
 6 catches it if the prompt fails to hold (layer 2).
 
 1. **Resume idempotence.** If `artifacts.dev_plan` is recorded AND the file
-   exists, PLAN already dispatched — skip to step 7 (record and load tasks),
-   then Gate 2. A crash between `artifact` and the gate must not re-spend a plan
-   run.
+   exists, the plan was already written: skip the dispatch and the HEAD guard
+   entirely — do not re-dispatch, do not re-spend a plan run. Instead run
+   `artifact --set dev_plan --path <plan path>`, then
+   `tasks --from <sprint doc path> --plan <plan path>` — the crash may have
+   happened before tasks were loaded, and `tasks[]` must be populated before
+   the gate — then continue at **Gate 2**.
 2. **Locate the spec:** `artifacts.sprint_doc` from `show --json` — the doc the
    operator approved at Gate 1. Missing from disk → report that and stop.
 3. **Derive the output path:**
@@ -199,9 +202,9 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
    `<YYYY-MM-DD>` is today's date as the environment reports it, `<id>` is the
    sprint id lowercased, and `-<slug>` is dropped when `sprint.slug` is null.
    `writing-plans` has a dated-path convention of its own and honors an explicit
-   override — supply this path and nothing else. Create the directory if needed.
-   As always: `artifacts.dev_plan` is the only authority anything downstream
-   reads.
+   override — supply this path and nothing else. Before dispatching, the
+   conductor runs `mkdir -p` on the output path's parent directory. As always:
+   `artifacts.dev_plan` is the only authority anything downstream reads.
 4. **Record HEAD.** Run `git rev-parse HEAD` from the repo root and keep the SHA.
 5. **Fill the template**
    [references/plan-prompt.md](references/plan-prompt.md) — `{SPRINT_DOC_PATH}`,
