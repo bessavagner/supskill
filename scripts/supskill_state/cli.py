@@ -32,7 +32,7 @@ def _add_init(subparsers) -> None:
     sub.add_argument("sprint_id", help="sprint id, e.g. s1 (lowercase [a-z0-9-] after normalizing)")
     sub.add_argument("--slug", help="human slug, e.g. state-spine")
     sub.add_argument("--entry", choices=["SCOPE", "PLAN", "EXECUTE"], default="SCOPE")
-    sub.add_argument("--backlog", help="path to the backlog driving this sprint")
+    sub.add_argument("--backlog", help="path to the backlog driving this sprint (required when entry is SCOPE)")
     sub.add_argument("--branch", help="git branch for this sprint")
     sub.add_argument(
         "--archive",

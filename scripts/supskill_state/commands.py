@@ -52,6 +52,12 @@ def init_sprint(
     scratch = derive_scratch(sprint_id)  # validates the id before any disk change
     normalized = normalize_sprint_id(sprint_id)
 
+    if entry_stage is Stage.SCOPE and not backlog:
+        raise StateError(
+            "a SCOPE-entry sprint has nothing to scope without a backlog: pass --backlog <path> "
+            "(no verb can set it after init; PLAN and EXECUTE entries may omit it)"
+        )
+
     path = store.state_path(root)
     if path.exists():
         if not archive:

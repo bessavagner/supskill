@@ -14,7 +14,7 @@ def test_north_star_demo(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
 
     # init s1
-    assert main(["init", "s1"]) == 0
+    assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
 
     # the REFINE stage happens (no gate guards SCOPE -> REFINE)
     assert main(["advance", "--to", "REFINE"]) == 0

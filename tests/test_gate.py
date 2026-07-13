@@ -25,7 +25,7 @@ def _gate_lines(tmp_path):
 
 
 def test_gate_appends_record_and_updates_state(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_gate("G1", "approved", "yes - looks right, go ahead", root=tmp_path)
 
     lines = _gate_lines(tmp_path)
@@ -40,7 +40,7 @@ def test_gate_appends_record_and_updates_state(tmp_path):
 
 
 def test_second_decision_on_same_gate_appends_history_and_last_wins(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_gate("G1", "rejected", "no - the scope section is wrong", root=tmp_path)
     record_gate("G1", "approved", "fixed, approved", root=tmp_path)
 
@@ -51,7 +51,7 @@ def test_second_decision_on_same_gate_appends_history_and_last_wins(tmp_path):
 
 def test_write_order_trail_lands_before_state(tmp_path, monkeypatch):
     # fail the SECOND write (state.json): the trail must already be on disk
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     before = state_path(tmp_path).read_bytes()
 
     def crash(state, path):
@@ -67,14 +67,14 @@ def test_write_order_trail_lands_before_state(tmp_path, monkeypatch):
 
 def test_empty_response_is_accepted_recorded_and_visible_in_show(tmp_path):
     # F-4: a fabricated approval must leave a readable (empty) quote, not be rejected
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_gate("G1", "approved", "", root=tmp_path)
     assert _gate_lines(tmp_path)[0]["response"] == ""
     assert 'response: ""' in render_show(tmp_path)
 
 
 def test_unknown_gate_id_and_decision_refused_with_nothing_written(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     before_state = state_path(tmp_path).read_bytes()
     with pytest.raises(StateError, match="unknown gate"):
         record_gate("G4", "approved", "x", root=tmp_path)
@@ -92,6 +92,6 @@ def test_gate_requires_an_initialized_sprint_before_writing_the_trail(tmp_path):
 
 def test_cli_gate(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "s1"]) == 0
+    assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
     assert main(["gate", "--id", "G1", "--decision", "approved", "--response", "approved, go"]) == 0
     assert load_state(state_path(tmp_path)).gates["G1_sprint_doc"] == "approved"

@@ -42,7 +42,7 @@ def _set_tasks(tmp_path, *statuses):
 
 def test_advance_to_execute_with_g2_null_refuses(tmp_path):
     # can you advance to EXECUTE with G2 == null? No.
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_gate("G1", "approved", "approved", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     advance_stage("REFINE", root=tmp_path)
@@ -56,7 +56,7 @@ def test_advance_to_execute_with_g2_null_refuses(tmp_path):
 
 
 def test_skipping_a_stage_is_impossible_regardless_of_gate_state(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     # even with every gate approved and artifacts present, SCOPE -> PLAN is not expressible
     record_gate("G1", "approved", "x", root=tmp_path)
     record_gate("G2", "approved", "x", root=tmp_path)
@@ -80,7 +80,7 @@ def test_review_is_final_nothing_to_advance_to(tmp_path):
 
 
 def test_unknown_target_stage_refused(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     _refused(tmp_path, "SHIP", "unknown stage")
 
 
@@ -88,12 +88,12 @@ def test_unknown_target_stage_refused(tmp_path):
 
 
 def test_scope_to_refine_needs_no_gate(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     assert advance_stage("REFINE", root=tmp_path).stage is Stage.REFINE
 
 
 def test_advance_to_plan_requires_doc_and_g1(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     advance_stage("REFINE", root=tmp_path)
 
     message = _refused(tmp_path, "PLAN", "G1_sprint_doc")  # neither: names the gate...
@@ -107,7 +107,7 @@ def test_advance_to_plan_requires_doc_and_g1(tmp_path):
 
 
 def test_a_rejected_gate_is_not_approved(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     advance_stage("REFINE", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     record_gate("G1", "rejected", "no - redo the scope section", root=tmp_path)
@@ -162,7 +162,7 @@ def test_entry_execute_reaches_review_with_all_gates_null(tmp_path):
 
 def test_entry_scope_can_never_reach_execute_without_both_gates(tmp_path):
     # whatever sequence of calls is attempted
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     record_artifact("dev_plan", _write_doc(tmp_path, "plan.md"), root=tmp_path)
 

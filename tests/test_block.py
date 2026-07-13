@@ -31,7 +31,7 @@ S9A = {
 
 
 def _init_with_task(tmp_path, task_id="T3"):
-    init_sprint("s9a", root=tmp_path)
+    init_sprint("s9a", backlog="backlog.md", root=tmp_path)
     state = load_state(state_path(tmp_path))
     state.tasks = [Task(id=task_id, seam="e2e", provable="operator", status=TaskStatus.PENDING)]
     dump_state(state, state_path(tmp_path))

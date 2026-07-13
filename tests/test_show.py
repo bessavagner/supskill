@@ -9,7 +9,7 @@ from supskill_state.store import append_jsonl, dump_state, gates_path, load_stat
 
 
 def _state_with_activity(tmp_path):
-    init_sprint("s1", slug="state-spine", root=tmp_path)
+    init_sprint("s1", slug="state-spine", backlog="backlog.md", root=tmp_path)
     state = load_state(state_path(tmp_path))
     state.gates["G1_sprint_doc"] = "approved"
     state.tasks = [
@@ -47,7 +47,7 @@ def test_show_reads_stage_gates_task_counts_and_blockers_in_one_glance(tmp_path)
 
 
 def test_show_makes_an_empty_gate_response_visible(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     append_jsonl(
         gates_path(tmp_path),
         {"gate": "G2", "decision": "approved", "response": "", "at": "2026-07-12T18:00:00+00:00"},
@@ -71,7 +71,7 @@ def test_cli_show_happy_path(tmp_path, monkeypatch, capsys):
 
 
 def test_show_tolerates_a_crash_torn_trailing_gate_line(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
     append_jsonl(
         gates_path(tmp_path),
         {"gate": "G1", "decision": "approved", "response": "yes", "at": "2026-07-12T18:00:00+00:00"},
@@ -94,7 +94,7 @@ def test_show_prints_backlog_and_recorded_artifacts(tmp_path):
 
 
 def test_show_marks_missing_backlog_with_a_dash(tmp_path):
-    init_sprint("s1", root=tmp_path)
+    init_sprint("s1", entry="PLAN", root=tmp_path)
     output = render_show(tmp_path)
     assert "backlog: -" in output
     assert "sprint_doc: -" in output
@@ -114,4 +114,4 @@ def test_cli_show_json(tmp_path, monkeypatch, capsys):
     assert parsed["stage"] == "SCOPE"
     assert parsed["sprint"]["id"] == "s1"
     assert set(parsed["artifacts"]) == {"sprint_doc", "dev_plan"}
-    assert parsed["backlog"] is None
+    assert parsed["backlog"] == "backlog.md"
