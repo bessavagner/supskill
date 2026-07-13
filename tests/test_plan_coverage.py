@@ -111,3 +111,54 @@ def test_a_language_tagged_fence_still_toggles():
     assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
     failures = validate_plan_coverage(plan, STORIES)
     assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]
+
+
+# SK-033 CommonMark fence tracking (S4 review, task-2 findings 1-4): the naive
+# ``` toggle from 144fd77 doesn't implement CommonMark fence rules, which reopens
+# false-accepts and introduces a new false-refuse.
+
+
+def test_a_heading_inside_a_tilde_fence_is_not_a_real_heading_finding_1():
+    # ~~~ is a valid CommonMark fence delimiter, just like ```. A toggle blind to
+    # tildes lets a heading inside a ~~~ fence count as real - the exact false-accept
+    # the original fix existed to close.
+    plan = "### Task 1: the verb (SK-030)\n~~~\n### Task 2: fenced example (SK-031)\n~~~\n"
+    failures = validate_plan_coverage(plan, STORIES)
+    assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]
+
+
+def test_a_self_closing_backtick_span_does_not_poison_fence_state_finding_2():
+    # A line like ```inline``` at line start is not a real opening fence: per
+    # CommonMark, a backtick fence's info string may not itself contain a backtick.
+    # A toggle that doesn't know this rule flips into "in fence" and never flips
+    # back, swallowing every real heading that follows.
+    plan = "### Task 1: the verb (SK-030)\n```inline```\n### Task 2: the guard (SK-031)\n"
+    assert plan_task_headings(plan) == [
+        "### Task 1: the verb (SK-030)",
+        "### Task 2: the guard (SK-031)",
+    ]
+    assert validate_plan_coverage(plan, STORIES) == []
+
+
+def test_nested_fence_with_shorter_inner_run_does_not_close_the_outer_fence_finding_3():
+    # CommonMark: a closing fence must be at least as long as its opener and use the
+    # same character. A 4-backtick outer fence containing a 3-backtick inner example
+    # must not be closed by the shorter inner run.
+    plan = (
+        "### Task 1: the verb (SK-030)\n"
+        "````\n"
+        "Example of a fenced block:\n"
+        "```\n"
+        "### Task 2: fenced inner example (SK-031)\n"
+        "```\n"
+        "end of outer example\n"
+        "````\n"
+    )
+    assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
+
+
+def test_an_unclosed_fence_at_eof_swallows_trailing_real_headings_by_design_finding_4():
+    # Fails safe (over-refuses) rather than guessing where an unterminated fence ends.
+    # This is deliberate, documented behavior, not an accident - this test pins it.
+    plan = "### Task 1: the verb (SK-030)\n```\nprose\n### Task 2: swallowed by unclosed fence (SK-031)\n"
+    assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
