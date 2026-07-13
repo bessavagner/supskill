@@ -63,14 +63,14 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 |---|------|---------------|-----|-----|
 | **E1** | **The state spine** | Everything compounds on it, it is the only pure-Python unit-testable part, and it kills the scratch-dir ritual structurally. Do FIRST. | 18 | **M** |
 | **E2** | **Conductor skill + plugin skeleton** | The disposable conductor: invoke, read state, resume. Nothing runs without it. | 12 | **M** |
-| **E3** | **SCOPE + REFINE + Gate 1** | The refine-at-pull-time stage. The bridge (F-1) and the proof-seam classification that Gate/E5 depend on. **The heart.** | 19 | **M** |
+| **E3** | **SCOPE + REFINE + Gate 1** | The refine-at-pull-time stage. The bridge (F-1) and the proof-seam classification that Gate/E5 depend on. **The heart.** | 23 | **M** |
 | **E4** | **PLAN + Gate 2** | Thin — mostly wiring `writing-plans` and intercepting its terminal question. | 10 | **M** |
 | **E5** | **EXECUTE (drain-then-halt)** | Where autonomy actually pays, and where silent guessing must be made impossible. | 19 | **M** |
 | **E6** | **REVIEW (PAR) + Gate 3 + replan shapes** | The generative gate — the one that writes the next sprint. Highest value, highest complexity. | 23 | **M** |
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 120 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
+**Total: 124 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure.
 
@@ -102,14 +102,15 @@ the real SDD output format before committing points.
 | SK-012 | Conductor resumes from `state.json` alone. `show` grows `artifacts` + `backlog` and a `--json` mode — the resume read-contract lives in the CLI, not in prose parsing state internals. Test: `/clear` mid-sprint, re-invoke, land on the same stage. (Invariant 5) | 4 | M | ☐ |
 | SK-013 | `/supskill run <sprint-id>` entry point: the init-or-resume-or-refuse matrix made explicit; the conductor never passes `--archive` itself; normalized-id comparison (case variants resume, never collide). Honours `sprint.entry` ∈ `SCOPE\|PLAN\|EXECUTE`. (**D7**) | 3 | M | ☐ |
 
-## E3 — SCOPE + REFINE + Gate 1 (19 pts) — **the heart**
+## E3 — SCOPE + REFINE + Gate 1 (23 pts) — **the heart**
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
-| SK-020 | SCOPE stage: dispatch `pm-execution:sprint-plan` as a subagent; write the sprint doc; record the artifact path. Note `sprint-plan` has **no output-path convention** — supskill must supply one. | 3 | M | ☐ |
+| SK-020 | SCOPE stage: dispatch `pm-execution:sprint-plan` as a subagent; write the sprint doc; record the artifact path. `sprint-plan` has **no output-path convention** — supskill supplies `<backlog-dir>/sprint-<normalized-id>-<slug>.md` as the dispatch default; `artifacts.sprint_doc` stays the only authority. Grown at S3 DoR: `init` refuses SCOPE entry without `--backlog`; `advance --to REFINE` requires a recorded, existing `sprint_doc` (`transitions.py` previously had no REFINE branch). | 4 | M | ☐ |
 | SK-021 | REFINE stage agent: read the **live source**, cite `file:line`, surface gaps the backlog's one-liner could not know, grow the scope. Output is spec-shaped enough for `writing-plans`. (F-1) | 8 | M | ☐ |
-| SK-022 | Proof-seam classification per story (`seam:`, `impact:`) → `provable: offline \| operator`. **E5 cannot drain-then-halt without this.** | 5 | M | ☐ |
+| SK-022 | Proof-seam classification per story (`seam:`, `impact:`) → `provable: offline \| operator`. **E5 cannot drain-then-halt without this.** S3 DoR: the grammar and its parser (`proofs.py`) land in E3 so the format is fixed before E4 parses it; SK-033 only adds the state-loading verb (its points unchanged). | 5 | M | ☐ |
 | SK-023 | Gate 1 in the conductor via real `AskUserQuestion`; decision + verbatim response → `gates.jsonl`. | 3 | M | ☐ |
+| SK-024 | Citation audit: `scripts/supskill-audit` verifies every backtick-wrapped `file:line` citation in a sprint doc resolves against the working tree; the conductor runs it before Gate 1. The mechanical floor under F-5 — it proves citations *resolve*, not that claims are true. PAR at REFINE deferred with a named revisit trigger: if S3's demo shows a shallow refinement passing both the audit and the operator, E6's PAR story extends to REFINE. (New at S3 DoR, finding 4.) | 3 | M | ☐ |
 
 **Risk:** SK-021 is the story most likely to underdeliver — "read the source and find the gaps" is
 exactly the kind of task an agent will do shallowly and report confidently (F-5). Consider PAR here
@@ -192,3 +193,10 @@ it with S1's own refinement pass as the first data point. (Report §7.2)
 +2 pts (10 → 12) and exposed a cross-epic gap — nothing populates `tasks[]`,
 which would otherwise have surfaced as an E5 failure (now SK-033). Two sprints,
 two data points, same direction. (Report §7.2)
+
+**Data point #3 (S3 DoR, 2026-07-13):** refinement against live source grew scope
++4 pts (19 → 23), and the sharpest finding was again structural — a headless
+conductor would have silently self-approved its own gate (`AskUserQuestion`
+auto-resolves empty × `gate`'s by-design acceptance of empty responses), which
+no backlog one-liner mentioned. The refusal now lives in the conductor
+(SK-023). Three sprints, three data points, same direction. (Report §7.2)
