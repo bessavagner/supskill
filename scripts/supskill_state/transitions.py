@@ -5,6 +5,9 @@ init's at EXECUTE never crosses the G2 check; a sprint entering at SCOPE
 cannot reach EXECUTE without G1 and G2 approved. advance is strictly
 one-step-forward; the replan shapes that move backwards are E6's explicit
 verbs, never a loosened advance.
+
+An empty tasks[] is refused on BOTH -> EXECUTE and -> REVIEW: an entry=EXECUTE
+sprint never crosses the first, so the second is the one that covers it.
 """
 
 from __future__ import annotations
@@ -32,7 +35,9 @@ def failed_preconditions(state: State, to: Stage, root: Path) -> list[str]:
     elif to is Stage.EXECUTE:
         _check_gate(state, "G2_plan", failures)
         _check_artifact(state, "dev_plan", root, failures)
+        _check_tasks_loaded(state, failures)
     elif to is Stage.REVIEW:
+        _check_tasks_loaded(state, failures)
         open_tasks = [task.id for task in state.tasks if task.status not in TERMINAL_STATUSES]
         if open_tasks:
             failures.append(
@@ -40,6 +45,15 @@ def failed_preconditions(state: State, to: Stage, root: Path) -> list[str]:
                 "still open: " + ", ".join(open_tasks)
             )
     return failures
+
+
+def _check_tasks_loaded(state: State, failures: list[str]) -> None:
+    """An empty tasks[] made the non-terminal check pass vacuously (S4 DoR finding 2)."""
+    if not state.tasks:
+        failures.append(
+            "tasks[] is empty: a sprint with no tasks has nothing to execute and nothing to "
+            "review; run `supskill-state tasks --from <sprint doc>` first"
+        )
 
 
 def _check_gate(state: State, key: str, failures: list[str]) -> None:

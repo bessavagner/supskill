@@ -75,7 +75,8 @@ def test_backwards_and_self_transitions_are_not_expressible(tmp_path):
 
 def test_review_is_final_nothing_to_advance_to(tmp_path):
     init_sprint("s1", entry="EXECUTE", root=tmp_path)
-    advance_stage("REVIEW", root=tmp_path)  # no tasks -> vacuously terminal
+    _set_tasks(tmp_path, TaskStatus.DONE)  # an empty tasks[] no longer passes vacuously
+    advance_stage("REVIEW", root=tmp_path)
     _refused(tmp_path, "SCOPE", "final stage")
 
 
@@ -128,6 +129,7 @@ def test_a_rejected_gate_is_not_approved(tmp_path):
 
 def test_advance_to_execute_requires_g2_and_dev_plan(tmp_path):
     init_sprint("s1", entry="PLAN", root=tmp_path)
+    _set_tasks(tmp_path, TaskStatus.PENDING)
     record_gate("G2", "approved", "plan approved", root=tmp_path)
     message = _refused(tmp_path, "EXECUTE", "dev_plan is not recorded")
     record_artifact("dev_plan", _write_doc(tmp_path, "plan.md"), root=tmp_path)
@@ -176,6 +178,7 @@ def test_entry_scope_can_never_reach_execute_without_both_gates(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     record_artifact("dev_plan", _write_doc(tmp_path, "plan.md"), root=tmp_path)
+    _set_tasks(tmp_path, TaskStatus.PENDING)
 
     _refused(tmp_path, "EXECUTE", "one-step-forward")  # from SCOPE
     advance_stage("REFINE", root=tmp_path)
@@ -199,3 +202,28 @@ def test_cli_refusal_is_nonzero_and_names_the_precondition(tmp_path, monkeypatch
     assert main(["advance", "--to", "EXECUTE"]) == 1
     err = capsys.readouterr().err
     assert "refused" in err and "G2_plan" in err
+
+
+# --- an empty tasks[] made the strongest precondition pass vacuously (S4 DoR finding 2) ---
+
+
+def test_advance_to_execute_refuses_an_empty_task_list(tmp_path):
+    # a sprint with no tasks has nothing to execute (S4 DoR finding 2)
+    init_sprint("s1", entry="PLAN", root=tmp_path)
+    record_gate("G2", "approved", "plan approved", root=tmp_path)
+    record_artifact("dev_plan", _write_doc(tmp_path, "plan.md"), root=tmp_path)
+    message = _refused(tmp_path, "EXECUTE", r"tasks\[\] is empty")
+    assert "tasks --from" in message  # the refusal names the way forward
+
+    _set_tasks(tmp_path, TaskStatus.PENDING)
+    assert advance_stage("EXECUTE", root=tmp_path).stage is Stage.EXECUTE
+
+
+def test_advance_to_review_refuses_an_empty_task_list_including_an_entry_execute_sprint(tmp_path):
+    # the vacuous pass this closes: nothing is non-terminal in an empty list, and an
+    # entry=EXECUTE sprint never crosses the -> EXECUTE guard, so REVIEW is its only one
+    init_sprint("s9b", entry="EXECUTE", root=tmp_path)
+    _refused(tmp_path, "REVIEW", r"tasks\[\] is empty")
+
+    _set_tasks(tmp_path, TaskStatus.DONE)
+    assert advance_stage("REVIEW", root=tmp_path).stage is Stage.REVIEW
