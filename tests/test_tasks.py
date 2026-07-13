@@ -108,3 +108,36 @@ def test_cli_tasks_reports_what_it_loaded(tmp_path, monkeypatch, capsys):
     assert "loaded 2 tasks: SK-001, SK-002" in capsys.readouterr().out
     assert main(["tasks", "--from", "ghost.md"]) == 1
     assert "no such doc" in capsys.readouterr().err
+
+
+def test_a_plan_that_covers_every_story_loads(tmp_path):
+    doc = _sprint(tmp_path)
+    (tmp_path / "plan.md").write_text(
+        "### Task 1: a (SK-001)\n### Task 2: b (SK-002)\n### Task 3: the deltas (process)\n",
+        encoding="utf-8",
+    )
+    state = load_tasks(doc, plan="plan.md", root=tmp_path)
+    assert [t.id for t in state.tasks] == ["SK-001", "SK-002"]
+
+
+def test_a_plan_that_drops_a_story_refuses_before_tasks_are_written(tmp_path):
+    doc = _sprint(tmp_path)
+    (tmp_path / "plan.md").write_text("### Task 1: a (SK-001)\n", encoding="utf-8")
+    with pytest.raises(StateError, match="SK-002"):
+        load_tasks(doc, plan="plan.md", root=tmp_path)
+    assert load_state(state_path(tmp_path)).tasks == []  # the operator never gates a plan with a hole
+
+
+def test_a_missing_plan_refuses(tmp_path):
+    doc = _sprint(tmp_path)
+    with pytest.raises(StateError, match="no such plan"):
+        load_tasks(doc, plan="ghost.md", root=tmp_path)
+
+
+def test_cli_tasks_with_plan_refuses_and_lists_every_violation(tmp_path, monkeypatch, capsys):
+    doc = _sprint(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "plan.md").write_text("### Task 1: mystery\n", encoding="utf-8")
+    assert main(["tasks", "--from", doc, "--plan", "plan.md"]) == 1
+    err = capsys.readouterr().err
+    assert "SK-001" in err and "SK-002" in err and "(process)" in err

@@ -29,6 +29,7 @@ from .model import (
     TaskStatus,
     state_to_dict,
 )
+from .plan_coverage import validate_plan_coverage
 from .proofs import parse_proof_lines
 from .scratch import derive_scratch, normalize_sprint_id
 from .transitions import failed_preconditions, next_stage
@@ -305,6 +306,18 @@ def load_tasks(
             "tasks[] already carries progress (" + ", ".join(started) + "); refusing to reset it. "
             "A fresh load is an operator decision: archive the run with init --archive"
         )
+
+    if plan is not None:
+        plan_path = root / plan
+        if not plan_path.is_file():
+            raise StateError(f"no such plan: {plan}")
+        failures = validate_plan_coverage(
+            plan_path.read_text(encoding="utf-8"), [proof.story for proof in proofs]
+        )
+        if failures:
+            raise StateError(
+                f"the dev plan does not cover the sprint doc's stories: {'; '.join(failures)}"
+            )
 
     state.tasks = [
         Task(id=proof.story, seam=proof.seam, provable=proof.provable, status=TaskStatus.PENDING)
