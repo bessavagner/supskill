@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import commands
+from . import commands, plan_guard
 from .errors import StateError
 
 
@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_block(subparsers)
     _add_tasks(subparsers)
     _add_advance(subparsers)
+    _add_plan_guard(subparsers)
     return parser
 
 
@@ -143,6 +144,24 @@ def _add_advance(subparsers) -> None:
 def _cmd_advance(args) -> int:
     state = commands.advance_stage(args.to)
     print(f"advanced to {state.stage.value}")
+    return 0
+
+
+def _add_plan_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "plan-guard",
+        help="did HEAD move across the PLAN dispatch? exit 1 means the plan agent committed",
+    )
+    sub.add_argument("--before", required=True, help="git rev-parse HEAD, taken BEFORE the dispatch")
+    sub.add_argument("--after", required=True, help="git rev-parse HEAD, taken AFTER the dispatch")
+    sub.set_defaults(func=_cmd_plan_guard)
+
+
+def _cmd_plan_guard(args) -> int:
+    if plan_guard.head_moved(args.before, args.after):
+        print(plan_guard.refusal(args.before, args.after), file=sys.stderr)
+        return 1
+    print(f"plan-guard: HEAD unchanged ({args.before.strip()})")
     return 0
 
 
