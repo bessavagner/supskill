@@ -24,7 +24,9 @@ def next_stage(current: Stage) -> Stage | None:
 def failed_preconditions(state: State, to: Stage, root: Path) -> list[str]:
     """Empty list means the transition may proceed. Gate failures are listed first."""
     failures: list[str] = []
-    if to is Stage.PLAN:
+    if to is Stage.REFINE:
+        _check_artifact(state, "sprint_doc", root, failures)
+    elif to is Stage.PLAN:
         _check_gate(state, "G1_sprint_doc", failures)
         _check_artifact(state, "sprint_doc", root, failures)
     elif to is Stage.EXECUTE:

@@ -16,12 +16,12 @@ def test_north_star_demo(tmp_path, monkeypatch, capsys):
     # init s1
     assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
 
-    # the REFINE stage happens (no gate guards SCOPE -> REFINE)
-    assert main(["advance", "--to", "REFINE"]) == 0
-
-    # REFINE produced the sprint doc; record it
-    (tmp_path / "sprint-doc.md").write_text("# refined sprint doc\n")
+    # SCOPE produced the sprint doc; record it (REFINE refines this same doc in place)
+    (tmp_path / "sprint-doc.md").write_text("# sprint doc\n")
     assert main(["artifact", "--set", "sprint_doc", "--path", "sprint-doc.md"]) == 0
+
+    # the REFINE stage happens (no gate guards SCOPE -> REFINE; the recorded doc does)
+    assert main(["advance", "--to", "REFINE"]) == 0
 
     # gate G1: the operator's actual words
     assert main(["gate", "--id", "G1", "--decision", "approved",

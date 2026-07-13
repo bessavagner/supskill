@@ -87,29 +87,40 @@ def test_unknown_target_stage_refused(tmp_path):
 # --- the three preconditions, each way ---
 
 
-def test_scope_to_refine_needs_no_gate(tmp_path):
+def test_advance_to_refine_requires_a_recorded_existing_sprint_doc(tmp_path):
+    # no gate guards SCOPE -> REFINE; the recorded doc does. Entry=PLAN/EXECUTE sprints
+    # never take this transition, so the precondition cannot reach them (D2).
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    message = _refused(tmp_path, "REFINE", "sprint_doc is not recorded")
+    assert "G1" not in message  # a doc-less REFINE is an artifact problem, not a gate problem
+
+    record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
+    (tmp_path / "doc.md").unlink()
+    _refused(tmp_path, "REFINE", "missing file")
+
+    _write_doc(tmp_path, "doc.md")
     assert advance_stage("REFINE", root=tmp_path).stage is Stage.REFINE
 
 
-def test_advance_to_plan_requires_doc_and_g1(tmp_path):
+def test_advance_to_plan_requires_g1_on_top_of_the_doc(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     advance_stage("REFINE", root=tmp_path)
 
-    message = _refused(tmp_path, "PLAN", "G1_sprint_doc")  # neither: names the gate...
-    assert "sprint_doc is not recorded" in message  # ...and the missing artifact
-
-    record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
-    _refused(tmp_path, "PLAN", "G1_sprint_doc")  # doc alone is not enough
+    _refused(tmp_path, "PLAN", "G1_sprint_doc")  # the doc is recorded; the gate alone refuses
 
     record_gate("G1", "approved", "approved", root=tmp_path)
-    assert advance_stage("PLAN", root=tmp_path).stage is Stage.PLAN  # both -> proceeds
+    (tmp_path / "doc.md").unlink()  # a doc that vanished after REFINE is re-caught at -> PLAN
+    _refused(tmp_path, "PLAN", "missing file")
+
+    _write_doc(tmp_path, "doc.md")
+    assert advance_stage("PLAN", root=tmp_path).stage is Stage.PLAN
 
 
 def test_a_rejected_gate_is_not_approved(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
-    advance_stage("REFINE", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
+    advance_stage("REFINE", root=tmp_path)
     record_gate("G1", "rejected", "no - redo the scope section", root=tmp_path)
     message = _refused(tmp_path, "PLAN", "G1_sprint_doc")
     assert "rejected" in message
