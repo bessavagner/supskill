@@ -89,7 +89,7 @@ Copy this checklist into your response and check items off as you go.
 | `stage` | Action |
 |---|---|
 | `SCOPE` | Follow **The SCOPE stage** below. |
-| `REFINE` | Report: "REFINE is not implemented yet — it lands with E3 (SCOPE + REFINE + Gate 1)." Stop. |
+| `REFINE` | Follow **The REFINE stage** below. |
 | `PLAN` | Report: "PLAN is not implemented yet — it lands with E4 (PLAN + Gate 2)." Add: the recorded `artifacts.sprint_doc` is the spec PLAN will hand to `superpowers:writing-plans`. Stop. |
 | `EXECUTE` | Report: "EXECUTE is not implemented yet — it lands with E5 (drain-then-halt)." Add: the recorded `artifacts.dev_plan` is the plan EXECUTE will drive. Stop. |
 | `REVIEW` | Report: "REVIEW is not implemented yet — it lands with E6 (PAR + Gate 3)." Stop. |
@@ -131,6 +131,29 @@ from a template, verify its artifact mechanically, record it via
 7. **Record and advance.** Run
    `artifact --set sprint_doc --path <output path>`, then
    `advance --to REFINE`, then continue at the REFINE stage.
+
+## The REFINE stage
+
+Re-invoked at stage REFINE, always re-dispatch on the doc's current content.
+Worst case an already-refined doc is refined again — acceptable, because
+Gate 1 still guards the result. Detecting "already refined" would mean parsing
+prose for state, which is exactly the coupling the resume contract refuses.
+
+1. **Locate the doc:** `artifacts.sprint_doc` from `show --json`. If the file
+   is missing from disk, report that and stop.
+2. **Fill the template**
+   [references/refine-prompt.md](references/refine-prompt.md):
+   `{SPRINT_DOC_PATH}`, `{BACKLOG_PATH}`, `{REPO_ROOT}` (the repo root the
+   conductor runs from), `{EXEMPLAR_DOC}` (an existing refined sprint doc in
+   the backlog's directory, or `none`), `{AUDIT_FAILURES}` = `none`. Dispatch
+   one general-purpose subagent with the filled template.
+3. **Audit mechanically.** From the repo root, run:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-audit --proofs <doc path>`
+   - Exit 0 → continue at **Gate 1** (next section).
+   - Exit 1 → re-dispatch **once**: the same filled template with
+     `{AUDIT_FAILURES}` set to the audit's failure output, quoted verbatim.
+     Run the audit again. A second failure → report the failures verbatim and
+     stop. Never dispatch a third time — there is no retry loop.
 
 ## Reference
 

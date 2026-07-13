@@ -24,7 +24,32 @@ def test_scope_template_states_the_two_constraints():
 
 
 def test_no_dispatch_template_line_instructs_running_the_state_cli():
-    for template in (SCOPE,):  # Task 6 adds REFINE here
+    for template in (SCOPE, REFINE):
         for line in template.read_text(encoding="utf-8").splitlines():
             if "supskill-state" in line:
                 assert "not" in line.lower(), f"{template.name}: {line!r}"
+
+
+def test_refine_template_names_its_placeholders():
+    text = REFINE.read_text(encoding="utf-8")
+    for placeholder in (
+        "{SPRINT_DOC_PATH}", "{BACKLOG_PATH}", "{REPO_ROOT}", "{EXEMPLAR_DOC}", "{AUDIT_FAILURES}",
+    ):
+        assert placeholder in text, placeholder
+
+
+def test_refine_template_quotes_the_grammar_verbatim():
+    # grammar-drift risk from the sprint risks table: proofs.py is the single
+    # authority; the quote in the prompt is pinned to the parser's own constant
+    from supskill_state.proofs import GRAMMAR_LINE
+
+    assert GRAMMAR_LINE in REFINE.read_text(encoding="utf-8")
+
+
+def test_refine_template_states_the_two_constraints_and_the_field_list():
+    text = REFINE.read_text(encoding="utf-8")
+    assert "cannot ask anyone anything" in text
+    assert "must not run `supskill-state`" in text
+    # the spec-shaped definition appears as a concrete field list, not as the word "spec-shaped"
+    assert "DoR findings (refined at pull time)" in text
+    assert "in place" in text
