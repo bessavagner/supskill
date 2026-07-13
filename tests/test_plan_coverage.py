@@ -56,3 +56,58 @@ def test_a_plan_with_no_task_headings_at_all_is_refused():
 def test_every_violation_is_reported_at_once():
     failures = validate_plan_coverage("### Task 1: mystery\n### Task 2: ghost (SK-099)\n", STORIES)
     assert len(failures) == 4  # unmarked heading, unknown story, and both stories dropped
+
+
+# SK-033 code-fence awareness (S4 review finding, Critical): dev plans routinely quote
+# example task briefs verbatim inside fenced code blocks. A heading matcher blind to
+# fences either false-accepts (an unrelated fenced example happens to mention a real
+# story, masking a genuine drop) or false-refuses (a fenced example heading that names
+# no real story, or names one that isn't a task in this plan).
+
+
+def test_a_heading_inside_a_fenced_code_block_is_not_a_real_heading():
+    plan = "### Task 1: the verb (SK-030)\n```\n### Task 2: fenced example (SK-031)\n```\n"
+    assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
+
+
+def test_false_accept_a_story_named_only_inside_a_fence_is_still_reported_dropped():
+    # STORIES = ["SK-030", "SK-031"]; only SK-030 is a real heading. SK-031 appears only
+    # inside a fenced example - it must not count as covering the story.
+    plan = (
+        "### Task 1: the verb (SK-030)\n"
+        "\n"
+        "```\n"
+        "### Task 2: an unrelated fenced example (SK-031)\n"
+        "```\n"
+    )
+    failures = validate_plan_coverage(plan, STORIES)
+    assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]
+
+
+def test_a_fenced_example_heading_naming_no_story_produces_no_violation():
+    plan = (
+        "### Task 1: the verb (SK-030)\n"
+        "### Task 2: the guard (SK-031)\n"
+        "```\n"
+        "### Task 4: mystery work\n"
+        "```\n"
+    )
+    assert validate_plan_coverage(plan, STORIES) == []
+
+
+def test_a_fenced_example_heading_marked_process_produces_no_violation():
+    plan = (
+        "### Task 1: the verb (SK-030)\n"
+        "### Task 2: the guard (SK-031)\n"
+        "```\n"
+        "### Task 4: the demo checklist (process)\n"
+        "```\n"
+    )
+    assert validate_plan_coverage(plan, STORIES) == []
+
+
+def test_a_language_tagged_fence_still_toggles():
+    plan = "### Task 1: the verb (SK-030)\n```python\n### Task 2: fenced example (SK-031)\n```\nprose after\n"
+    assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
+    failures = validate_plan_coverage(plan, STORIES)
+    assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]

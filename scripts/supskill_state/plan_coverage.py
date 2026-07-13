@@ -22,11 +22,25 @@ PROCESS_MARKER = "(process)"
 
 _TASK_HEADING = re.compile(r"^###\s+Task\s+\d+\b.*$")
 _STORY_ID = re.compile(r"SK-\d+")
+_FENCE = re.compile(r"^\s*```")
 
 
 def plan_task_headings(text: str) -> list[str]:
-    """Every '### Task N ...' heading line, in document order."""
-    return [line.rstrip() for line in text.splitlines() if _TASK_HEADING.match(line)]
+    """Every '### Task N ...' heading line, in document order.
+
+    Skips lines inside fenced code blocks (```` ``` ```` or ```` ```lang ````): dev plans
+    routinely quote example task briefs - including their test-fixture code - verbatim
+    inside fences, and a quoted example is not a real task.
+    """
+    headings: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if not in_fence and _TASK_HEADING.match(line):
+            headings.append(line.rstrip())
+    return headings
 
 
 def validate_plan_coverage(plan_text: str, story_ids: list[str]) -> list[str]:
