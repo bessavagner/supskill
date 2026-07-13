@@ -24,8 +24,9 @@ everything from that file. Never rely on anything a previous conversation knew.
   through a `supskill-state` verb. If the CLI refuses, report its message
   verbatim and stop — never work around a refusal.
 - **Never pass `--archive`.** Archiving a half-finished sprint is an operator
-  decision. The only thing this skill does with that flag is name it in the
-  refusal message of matrix cell 3 below.
+  decision. The only thing this skill does with that flag is name it in a
+  refusal message and stop — matrix cell 3 or the SCOPE stage's backlog check
+  below.
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
   and no template instructs an agent to run one or to write under `.supskill/`.
