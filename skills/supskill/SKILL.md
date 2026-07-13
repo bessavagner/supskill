@@ -236,6 +236,31 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
    verbatim and stop — the operator never approves a plan with a hole in it.
 9. Continue at **Gate 2** (next section).
 
+## Gate 2 — the operator reads the dev plan
+
+The same shape as Gate 1, deliberately. The CLI records empty gate responses BY
+DESIGN — a fabricated approval must leave a readable empty quote in the trail.
+So the refusal to treat silence as consent lives here, in the conductor, and
+nowhere else.
+
+1. **Ask for real.** Use the `AskUserQuestion` tool: approve / reject the dev
+   plan at its recorded path, free text welcome. Name the plan path in the
+   question so the operator knows what they are approving.
+2. **An empty or auto-resolved answer is not a decision.** In headless runs the
+   question tool resolves instantly with an empty answer. If the answer comes
+   back empty, do NOT call `gate`. Report that Gate 2 requires an interactive
+   operator, and stop.
+3. **Record verbatim.** A non-empty answer — the selected label plus any free
+   text, unedited — goes to:
+   `gate --id G2 --decision <approved|rejected> --response "<verbatim>"`
+4. `approved` → `advance --to EXECUTE` → continue at the `EXECUTE` dispatch row
+   (E5's honest stub: it reports and stops — do not improvise EXECUTE).
+5. `rejected` → the decision is recorded and final for this pass; report it and
+   stop, naming the rework loop: the operator edits the plan directly or asks
+   for a fresh PLAN pass, then re-invokes `/supskill run <sprint-id>` and
+   re-gates. The last decision wins in state while every attempt stays in the
+   trail.
+
 ## Reference
 
 - Why this skill is user-invoked only:
