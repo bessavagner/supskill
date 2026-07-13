@@ -9,6 +9,10 @@ from pathlib import Path
 REFERENCES = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "references"
 SCOPE = REFERENCES / "scope-prompt.md"
 REFINE = REFERENCES / "refine-prompt.md"
+PLAN = REFERENCES / "plan-prompt.md"
+
+TEMPLATES = (SCOPE, REFINE, PLAN)
+EXECUTION_SUB_SKILLS = ("subagent-driven-development", "executing-plans")
 
 
 def test_scope_template_names_its_placeholders():
@@ -24,10 +28,45 @@ def test_scope_template_states_the_two_constraints():
 
 
 def test_no_dispatch_template_line_instructs_running_the_state_cli():
-    for template in (SCOPE, REFINE):
+    for template in TEMPLATES:
         for line in template.read_text(encoding="utf-8").splitlines():
             if "supskill-state" in line:
                 assert "not" in line.lower(), f"{template.name}: {line!r}"
+
+
+def test_no_dispatch_template_line_instructs_an_execution_sub_skill():
+    # SK-031: writing-plans' Execution Handoff names a REQUIRED SUB-SKILL per branch. No
+    # template may route its agent into one - a plan agent that executes bypasses Gate 2
+    # entirely (state.json still reads PLAN while the branch carries the commits).
+    for template in TEMPLATES:
+        for line in template.read_text(encoding="utf-8").splitlines():
+            if any(skill in line for skill in EXECUTION_SUB_SKILLS):
+                assert "not" in line.lower(), f"{template.name}: {line!r}"
+
+
+def test_plan_template_names_its_placeholders():
+    text = PLAN.read_text(encoding="utf-8")
+    for placeholder in ("{SPRINT_DOC_PATH}", "{OUTPUT_PATH}", "{REPO_ROOT}", "{EXEMPLAR_PLAN}"):
+        assert placeholder in text, placeholder
+
+
+def test_plan_template_states_the_two_standing_constraints():
+    text = PLAN.read_text(encoding="utf-8")
+    assert "cannot ask anyone anything" in text  # D4 / invariant 2
+    assert "must not run `supskill-state`" in text  # invariant 3, third surface
+
+
+def test_plan_template_pre_answers_the_execution_handoff_and_stops():
+    text = PLAN.read_text(encoding="utf-8")
+    assert "subagent-driven, always" in text  # the question is already answered
+    assert "superpowers:writing-plans" in text  # the skill it must actually invoke
+    assert "do not implement, test, or commit anything" in text.lower()
+
+
+def test_plan_template_states_the_join_key_and_the_citation_rule():
+    text = PLAN.read_text(encoding="utf-8")
+    assert "(SK-0xx)" in text and "(process)" in text  # the heading grammar SK-033 validates
+    assert "exists today" in text  # cite lines only for code that exists today
 
 
 def test_refine_template_names_its_placeholders():
