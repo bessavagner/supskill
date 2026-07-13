@@ -155,6 +155,30 @@ prose for state, which is exactly the coupling the resume contract refuses.
      Run the audit again. A second failure → report the failures verbatim and
      stop. Never dispatch a third time — there is no retry loop.
 
+## Gate 1 — the operator reads the refined doc
+
+The CLI records empty gate responses BY DESIGN — a fabricated approval must
+leave a readable empty quote in the trail. So the refusal to treat silence as
+consent lives here, in the conductor, and nowhere else.
+
+1. **Ask for real.** Use the `AskUserQuestion` tool: approve / reject the
+   refined sprint doc at its recorded path, free text welcome. Name the doc
+   path in the question so the operator knows what they are approving.
+2. **An empty or auto-resolved answer is not a decision.** In headless runs
+   the question tool resolves instantly with an empty answer. If the answer
+   comes back empty, do NOT call `gate`. Report that Gate 1 requires an
+   interactive operator, and stop.
+3. **Record verbatim.** A non-empty answer — the selected label plus any free
+   text, unedited — goes to:
+   `gate --id G1 --decision <approved|rejected> --response "<verbatim>"`
+4. `approved` → `advance --to PLAN` → continue at the `PLAN` dispatch row
+   (E4's honest stub: it reports and stops — do not improvise PLAN).
+5. `rejected` → the decision is recorded and final for this pass; report it
+   and stop, naming the rework loop: the operator edits the doc directly or
+   asks for a fresh REFINE pass, then re-invokes `/supskill run <sprint-id>`
+   and re-gates. The last decision wins in state while every attempt stays in
+   the trail.
+
 ## Reference
 
 - Why this skill is user-invoked only:
