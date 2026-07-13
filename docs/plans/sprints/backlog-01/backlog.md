@@ -62,15 +62,15 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | # | Epic | Why it's here | Pts | Pri |
 |---|------|---------------|-----|-----|
 | **E1** | **The state spine** | Everything compounds on it, it is the only pure-Python unit-testable part, and it kills the scratch-dir ritual structurally. Do FIRST. | 18 | **M** |
-| **E2** | **Conductor skill + plugin skeleton** | The disposable conductor: invoke, read state, resume. Nothing runs without it. | 10 | **M** |
+| **E2** | **Conductor skill + plugin skeleton** | The disposable conductor: invoke, read state, resume. Nothing runs without it. | 12 | **M** |
 | **E3** | **SCOPE + REFINE + Gate 1** | The refine-at-pull-time stage. The bridge (F-1) and the proof-seam classification that Gate/E5 depend on. **The heart.** | 19 | **M** |
-| **E4** | **PLAN + Gate 2** | Thin — mostly wiring `writing-plans` and intercepting its terminal question. | 7 | **M** |
+| **E4** | **PLAN + Gate 2** | Thin — mostly wiring `writing-plans` and intercepting its terminal question. | 10 | **M** |
 | **E5** | **EXECUTE (drain-then-halt)** | Where autonomy actually pays, and where silent guessing must be made impossible. | 19 | **M** |
 | **E6** | **REVIEW (PAR) + Gate 3 + replan shapes** | The generative gate — the one that writes the next sprint. Highest value, highest complexity. | 23 | **M** |
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 115 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
+**Total: 120 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure.
 
@@ -93,14 +93,14 @@ gates cannot be skipped.
 **DoR note:** SK-003 and SK-006 carry the design's two load-bearing constraints. Refine both against
 the real SDD output format before committing points.
 
-## E2 — Conductor skill + plugin skeleton (10 pts)
+## E2 — Conductor skill + plugin skeleton (12 pts)
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
 | SK-010 | Plugin skeleton: `.claude-plugin/plugin.json`; components (`skills/`, `agents/`, `scripts/`) at plugin **root**, not inside `.claude-plugin/`. | 2 | M | ☐ |
-| SK-011 | `SKILL.md` whose `description` states **only triggering conditions** and does **not** summarize its own workflow — a documented regression causes agents to skip half the process otherwise. | 3 | M | ☐ |
-| SK-012 | Conductor resumes from `state.json` alone. Test: `/clear` mid-sprint, re-invoke, land on the same stage. (Invariant 5) | 3 | M | ☐ |
-| SK-013 | `/supskill run <sprint-id>` entry point; honours `sprint.entry` ∈ `SCOPE\|PLAN\|EXECUTE`. (**D7**) | 2 | M | ☐ |
+| SK-011 | `SKILL.md` whose `description` states **only triggering conditions** and does **not** summarize its own workflow — a documented regression causes agents to skip half the process otherwise. Decided at S2 DoR: v1 is user-invoked only (`disable-model-invocation: true`) because the conductor is side-effecting; SK-061 inherits the flagged tension. | 3 | M | ☐ |
+| SK-012 | Conductor resumes from `state.json` alone. `show` grows `artifacts` + `backlog` and a `--json` mode — the resume read-contract lives in the CLI, not in prose parsing state internals. Test: `/clear` mid-sprint, re-invoke, land on the same stage. (Invariant 5) | 4 | M | ☐ |
+| SK-013 | `/supskill run <sprint-id>` entry point: the init-or-resume-or-refuse matrix made explicit; the conductor never passes `--archive` itself; normalized-id comparison (case variants resume, never collide). Honours `sprint.entry` ∈ `SCOPE\|PLAN\|EXECUTE`. (**D7**) | 3 | M | ☐ |
 
 ## E3 — SCOPE + REFINE + Gate 1 (19 pts) — **the heart**
 
@@ -115,13 +115,14 @@ the real SDD output format before committing points.
 exactly the kind of task an agent will do shallowly and report confidently (F-5). Consider PAR here
 too, not just at E6.
 
-## E4 — PLAN + Gate 2 (7 pts)
+## E4 — PLAN + Gate 2 (10 pts)
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
 | SK-030 | PLAN stage: dispatch `superpowers:writing-plans` with the refined sprint doc as the spec. | 3 | M | ☐ |
 | SK-031 | Intercept `writing-plans`' terminal question (Subagent-Driven vs Inline). It **ends by asking the user**; an unattended conductor stalls otherwise. Answer: subagent-driven, always. | 2 | M | ☐ |
 | SK-032 | Gate 2 (plan review) → `gates.jsonl`. | 2 | M | ☐ |
+| SK-033 | `supskill-state` verb that loads `tasks[]` (id, seam, provable, status=PENDING) from the refined sprint doc / dev plan into state. Today `init` writes `[]` and no verb adds tasks, while `block` requires the task to exist — without this, E5 cannot block, park, or map a single SDD status. (Proposed at S2 DoR, finding 6.) | 3 | M | ☐ |
 
 ## E5 — EXECUTE, drain-then-halt (19 pts)
 
@@ -186,3 +187,8 @@ It is, in the vocabulary we stole, the **walking skeleton**: harness first, feat
 blinkebot evidence cuts both ways — scope grew at refinement *every* sprint, which either proves the
 gate always earns its keep or proves it is predictable enough to skip. Do not decide it here; decide
 it with S1's own refinement pass as the first data point. (Report §7.2)
+
+**Data point #2 (S2 DoR, 2026-07-12):** refinement against live source grew scope
++2 pts (10 → 12) and exposed a cross-epic gap — nothing populates `tasks[]`,
+which would otherwise have surfaced as an E5 failure (now SK-033). Two sprints,
+two data points, same direction. (Report §7.2)
