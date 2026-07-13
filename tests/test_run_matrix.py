@@ -23,6 +23,13 @@ def test_cell_no_state_init_then_dispatch_lands_on_default_entry(tmp_path, monke
     assert json.loads(capsys.readouterr().out)["stage"] == "SCOPE"
 
 
+def test_cell_no_state_show_refuses_naming_the_missing_state_file(tmp_path, monkeypatch, capsys):
+    # SKILL.md step 1 branches to init on this exact phrase - the conductor's cell-1 trigger
+    monkeypatch.chdir(tmp_path)
+    assert main(["show", "--json"]) == 1
+    assert "no state file" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("entry", ["PLAN", "EXECUTE"])
 def test_cell_no_state_entry_flag_lands_dispatch_on_the_entry_stage(tmp_path, monkeypatch, capsys, entry):
     monkeypatch.chdir(tmp_path)
