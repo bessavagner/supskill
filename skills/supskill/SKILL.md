@@ -26,6 +26,9 @@ everything from that file. Never rely on anything a previous conversation knew.
 - **Never pass `--archive`.** Archiving a half-finished sprint is an operator
   decision. The only thing this skill does with that flag is name it in the
   refusal message of matrix cell 3 below.
+- **Stage agents never touch state.** Stages dispatch subagents from templates
+  under `references/`; the conductor runs every `supskill-state` call itself,
+  and no template instructs an agent to run one or to write under `.supskill/`.
 
 ## Arguments
 
@@ -80,18 +83,53 @@ Copy this checklist into your response and check items off as you go.
 5. **Dispatch on `stage`.** Look up `stage` in the table below and do exactly
    what it says. `stage` from `show --json` is the dispatch's only input.
 
-## Dispatch table (v-E2: every stage is an honest stub)
+## Dispatch table
 
 | `stage` | Action |
 |---|---|
-| `SCOPE` | Report: "SCOPE is not implemented yet — it lands with E3 (SCOPE + REFINE + Gate 1)." Stop. |
+| `SCOPE` | Follow **The SCOPE stage** below. |
 | `REFINE` | Report: "REFINE is not implemented yet — it lands with E3 (SCOPE + REFINE + Gate 1)." Stop. |
 | `PLAN` | Report: "PLAN is not implemented yet — it lands with E4 (PLAN + Gate 2)." Add: the recorded `artifacts.sprint_doc` is the spec PLAN will hand to `superpowers:writing-plans`. Stop. |
 | `EXECUTE` | Report: "EXECUTE is not implemented yet — it lands with E5 (drain-then-halt)." Add: the recorded `artifacts.dev_plan` is the plan EXECUTE will drive. Stop. |
 | `REVIEW` | Report: "REVIEW is not implemented yet — it lands with E6 (PAR + Gate 3)." Stop. |
 
-A stub that init's, resumes, and honestly says "not implemented yet; here is
-the state" is the correct v-E2 behavior — do not improvise a stage.
+PLAN, EXECUTE, and REVIEW are honest stubs until their epics land — do not
+improvise a stage. An implemented stage follows its section below exactly.
+
+## The SCOPE stage
+
+The stage pattern (E4–E6 copy this shape): dispatch a fresh-context subagent
+from a template, verify its artifact mechanically, record it via
+`supskill-state`, advance, fall through.
+
+1. **Resume idempotence.** If `artifacts.sprint_doc` is recorded AND the file
+   exists, SCOPE already ran — a crash between `artifact` and `advance` must
+   not re-spend a run. Run `advance --to REFINE` and continue at the REFINE
+   stage.
+2. **Check the backlog.** If `backlog` is null (a pre-S3 state file; `init`
+   now refuses to create this), report that a SCOPE sprint without a backlog
+   has nothing to scope, name
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <sprint-id> --archive --backlog <path>`
+   as the operator's way forward WITHOUT running it, and stop.
+3. **Derive the output path** — a default the prompt supplies; the recorded
+   artifact is the only authority anything downstream reads. The path is the
+   backlog's own directory + `sprint-<id>-<slug>.md`, where `<id>` is the
+   sprint id lowercased and `-<slug>` is dropped when `sprint.slug` is null.
+   Example: backlog `docs/plans/sprints/backlog-01/backlog.md`, sprint `s4`,
+   slug `plan-gate2` → `docs/plans/sprints/backlog-01/sprint-s4-plan-gate2.md`.
+4. **Fill the template** [references/scope-prompt.md](references/scope-prompt.md)
+   — every `{PLACEHOLDER}` it names. `{EXEMPLAR_DOCS}` is up to two existing
+   `sprint-*.md` files in the backlog's directory (never the output path
+   itself); if none exist, fill it with `none`.
+5. **Dispatch** one general-purpose subagent whose entire prompt is the filled
+   template.
+6. **Verify mechanically.** The file must now exist at the derived output
+   path. If it does not, report the agent's returned output verbatim and stop
+   — no blocker verb is available before tasks exist, and the operator is one
+   gate away.
+7. **Record and advance.** Run
+   `artifact --set sprint_doc --path <output path>`, then
+   `advance --to REFINE`, then continue at the REFINE stage.
 
 ## Reference
 
