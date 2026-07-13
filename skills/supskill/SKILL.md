@@ -90,12 +90,12 @@ Copy this checklist into your response and check items off as you go.
 |---|---|
 | `SCOPE` | Follow **The SCOPE stage** below. |
 | `REFINE` | Follow **The REFINE stage** below. |
-| `PLAN` | Report: "PLAN is not implemented yet — it lands with E4 (PLAN + Gate 2)." Add: the recorded `artifacts.sprint_doc` is the spec PLAN will hand to `superpowers:writing-plans`. Stop. |
+| `PLAN` | Follow **The PLAN stage** below. |
 | `EXECUTE` | Report: "EXECUTE is not implemented yet — it lands with E5 (drain-then-halt)." Add: the recorded `artifacts.dev_plan` is the plan EXECUTE will drive. Stop. |
 | `REVIEW` | Report: "REVIEW is not implemented yet — it lands with E6 (PAR + Gate 3)." Stop. |
 
-PLAN, EXECUTE, and REVIEW are honest stubs until their epics land — do not
-improvise a stage. An implemented stage follows its section below exactly.
+EXECUTE and REVIEW are honest stubs until their epics land — do not improvise a
+stage. An implemented stage follows its section below exactly.
 
 ## The SCOPE stage
 
@@ -178,6 +178,60 @@ consent lives here, in the conductor, and nowhere else.
    asks for a fresh REFINE pass, then re-invokes `/supskill run <sprint-id>`
    and re-gates. The last decision wins in state while every attempt stays in
    the trail.
+
+## The PLAN stage
+
+Same pattern as SCOPE (dispatch → verify → record → advance), plus one thing no
+earlier stage needed. The plan agent is the first dispatched agent whose own
+skill tries to route it into *executing* what it just planned: `writing-plans`
+ends by naming a REQUIRED SUB-SKILL per execution mode, and a subagent's
+question tool auto-resolves empty. The template pre-answers that (layer 1). Step
+6 catches it if the prompt fails to hold (layer 2).
+
+1. **Resume idempotence.** If `artifacts.dev_plan` is recorded AND the file
+   exists, PLAN already dispatched — skip to step 7 (record and load tasks),
+   then Gate 2. A crash between `artifact` and the gate must not re-spend a plan
+   run.
+2. **Locate the spec:** `artifacts.sprint_doc` from `show --json` — the doc the
+   operator approved at Gate 1. Missing from disk → report that and stop.
+3. **Derive the output path:**
+   `docs/superpowers/plans/<YYYY-MM-DD>-sprint-<id>-<slug>.md`, where
+   `<YYYY-MM-DD>` is today's date as the environment reports it, `<id>` is the
+   sprint id lowercased, and `-<slug>` is dropped when `sprint.slug` is null.
+   `writing-plans` has a dated-path convention of its own and honors an explicit
+   override — supply this path and nothing else. Create the directory if needed.
+   As always: `artifacts.dev_plan` is the only authority anything downstream
+   reads.
+4. **Record HEAD.** Run `git rev-parse HEAD` from the repo root and keep the SHA.
+5. **Fill the template**
+   [references/plan-prompt.md](references/plan-prompt.md) — `{SPRINT_DOC_PATH}`,
+   `{OUTPUT_PATH}`, `{REPO_ROOT}`, `{EXEMPLAR_PLAN}` (an existing plan under
+   `docs/superpowers/plans/`, or `none`) — and dispatch one general-purpose
+   subagent whose entire prompt is the filled template.
+6. **The HEAD guard.** Run `git rev-parse HEAD` again, then:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state plan-guard --before <before> --after <after>`
+   - Exit 0 → continue.
+   - Exit 1 → **stop here.** Do not record the artifact, do not load tasks, do
+     not advance, do not call `gate`. Report the guard's message verbatim,
+     followed by the output of `git log --oneline <before>..<after>` so the
+     operator can see exactly what the plan agent committed. The plan stage
+     produced commits; a plan is a document, and this run is stopped for you to
+     inspect them.
+7. **Verify and audit the plan.** The file must now exist at the derived output
+   path. If it does not, report the agent's returned output verbatim and stop —
+   never guess a path the agent may have used instead. Then, from the repo root:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-audit <plan path>` — citations only,
+   **no `--proofs`**: a dev plan carries no proof lines. Exit 1 → report the
+   failures verbatim and stop. This is a hard failure, not advisory; there is no
+   re-dispatch loop at PLAN.
+8. **Record and load tasks.** Run
+   `artifact --set dev_plan --path <plan path>`, then
+   `tasks --from <sprint doc path> --plan <plan path>`. The second call is where
+   a plan that silently dropped a story is caught: every story in the sprint doc
+   must be named by a `### Task N … (SK-0xx)` heading, and every task heading
+   must name a known story or the literal `(process)`. On a refusal, report it
+   verbatim and stop — the operator never approves a plan with a hole in it.
+9. Continue at **Gate 2** (next section).
 
 ## Reference
 
