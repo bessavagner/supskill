@@ -274,43 +274,45 @@ nowhere else.
 
 ## The EXECUTE stage
 
-**You are the controller.** Invoke `superpowers:subagent-driven-development` in
-**your own session** and run its loop yourself — that is the same-session mode
-SDD's own decision tree names. Do not hand the loop to a subagent: the loop is
-where every status, blocker and concern appears, and a subagent can neither run
-`supskill-state` (invariant 3) nor ask the operator anything (D4). The
-fresh-context boundary is still there — SDD puts it per *task*, which is where
-it belongs.
+**You are the controller.** Invoke `superpowers:subagent-driven-development` in **your
+own session** and run its loop yourself — that is the same-session mode SDD's own
+decision tree names. Do not hand the loop to a subagent: the loop is where every status,
+blocker and concern appears, and a subagent can neither run `supskill-state`
+(invariant 3) nor ask the operator anything (D4). The fresh-context boundary is still
+there — SDD puts it per *task*, which is where it belongs.
 
-Compose SDD verbatim (D1): its implementer prompt, its task-reviewer prompt, its
-review loop, its fix loop, its model selection. supskill re-implements none of
-it and adds no prompt template of its own. What supskill adds is the discipline
-below. **Read SDD's SKILL.md and its three `scripts/` before the first
-dispatch** — Model Selection, Handling Implementer Status, File Handoffs,
-Durable Progress and Red Flags are the contract you are composing.
+Compose SDD verbatim (D1): its implementer prompt, its task-reviewer prompt, its review
+loop, its fix loop, its model selection — everything except the final whole-branch
+review, which is E6's; see **The halt**. supskill re-implements none of it and adds no
+prompt template of its own. What supskill adds is the discipline below. **Read SDD's
+SKILL.md and its three `scripts/` before the first dispatch** — Model Selection, Handling
+Implementer Status, File Handoffs, Durable Progress and Red Flags are the contract you
+are composing.
 
 ### Before the first dispatch — four checks, in this order
 
 SDD's three scripts — `sdd-workspace`, `task-brief`, `review-package` — live in
 the installed superpowers plugin: not on `PATH`, and **not** under
-`${CLAUDE_PLUGIN_ROOT}` (that is *this* plugin). Resolve their directory once from
-the loaded `subagent-driven-development` skill's own location, invoke each by
-absolute path, and **never re-implement one** — a hand-rolled `task-brief` hands
-the implementer a brief that is not SDD's, which is exactly the D1 violation this
-stage exists to avoid.
+`${CLAUDE_PLUGIN_ROOT}` (that is *this* plugin). Resolve their directory once from the
+loaded `subagent-driven-development` skill's own location — the skill payload's first
+line, `Base directory for this skill: <abs path>`, is that location, so do not glob the
+plugin cache — invoke each by absolute path, and **never re-implement one**: a
+hand-rolled `task-brief` hands the implementer a brief that is not SDD's, which is
+exactly the D1 violation this stage exists to avoid.
 
 1. **The branch check.** Derive the default branch, never assume it: it is what
-   `git symbolic-ref --short refs/remotes/origin/HEAD` names with `origin/`
-   stripped; with no `origin`, what `git config --get init.defaultBranch` names,
-   falling back to `main`. Then run `git rev-parse --abbrev-ref HEAD`. If that is
-   the default branch, **stop before dispatching anything**: report that EXECUTE
-   writes commits and will not write them to the default branch, and name
-   `git switch -c <branch>` as the operator's move. If it returns the literal
-   `HEAD`, you are on a **detached HEAD** — not a branch, and every commit made
-   there is one `git switch` from unreachable. Stop exactly the same way, and name
-   the same move. Do not create, switch, or delete a branch yourself — the same
-   restraint that keeps `--archive` out of your hands. (SDD forbids implementing on
-   main without explicit consent, and a subagent cannot give it.)
+   `git symbolic-ref --short refs/remotes/origin/HEAD` names with `origin/` stripped.
+   **If that command fails or prints nothing** — `origin/HEAD` is unset in any repo not
+   created by `git clone` — use `git config --get init.defaultBranch`; if that is unset
+   too, take whichever of `origin/main` / `origin/master`
+   `git rev-parse --verify --quiet` resolves, and if neither or both resolve, that is a
+   **blocker**: the ladder never ends in a `main` guess. Then run
+   `git rev-parse --abbrev-ref HEAD`. If that is the default branch, **stop before
+   dispatching anything**: report that EXECUTE writes commits and will not write them to
+   the default branch, and name `git switch -c <branch>` as the operator's move. If it
+   returns the literal `HEAD`, you are on a **detached HEAD**: stop exactly the same way,
+   and name the same move. Do not create, switch, or delete a branch yourself — the same
+   restraint that keeps `--archive` out of your hands.
 2. **Prepare the scratch.** Run SDD's `sdd-workspace` script once — it creates
    `.superpowers/sdd/` and writes the self-ignoring `.gitignore` that keeps every
    sprint's scratch out of `git status`. Then `mkdir -p <scratch>`, where
@@ -339,14 +341,12 @@ stage exists to avoid.
     re-dispatch
   - review package: `review-package <BASE> HEAD <scratch>/review-<N>.diff`
 - **`BASE` is recorded, never derived.** Before each implementer dispatch, run
-  `git rev-parse HEAD` and keep that SHA as the task's `BASE`. **Never `HEAD~1`**
-  — SDD says in as many words that it silently drops all but the last commit of a
-  multi-commit task. EXECUTE also **produces** the final whole-branch review's
-  package — an output it leaves for E6, never an input it consumes (see **The
-  halt**):
+  `git rev-parse HEAD` and keep that SHA as the task's `BASE`. **Never `HEAD~1`** — SDD
+  says in as many words that it silently drops all but the last commit of a multi-commit
+  task. EXECUTE also **produces** the final whole-branch review's package — an output it
+  leaves for E6, never an input it consumes (see **The halt**):
   `review-package $(git merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`,
   with `<default-branch>` derived exactly as in the branch check.
-  `sprint.branch` is optional at init and is not the authority here — `git` is.
 - **Every dispatch names its model explicitly.** An omitted model silently
   inherits this session's — usually the most capable and most expensive one.
   *Which* model per role is SDD's Model Selection section's call, not this
@@ -355,9 +355,7 @@ stage exists to avoid.
   It is keyed by task number, task numbers restart every sprint, and its
   contract is "listed complete = do not re-dispatch" — so a ledger left by one
   sprint tells the next that its Task 1 is already finished. `tasks[]` is the ledger:
-  sprint-scoped by construction, and the file you resume from (invariant 5). A
-  stale `progress.md` on disk is ignored and named once in the halt report, so
-  the operator can delete it.
+  sprint-scoped by construction, and the file you resume from (invariant 5).
 - **No dispatched agent runs `supskill-state`** or touches `.supskill/`
   (invariant 3). SDD's implementers commit code; you record every status, every
   blocker and every advance yourself — **after** the task review, never on an
@@ -368,15 +366,17 @@ stage exists to avoid.
 
 The unit of work is a **`### Task N` heading in the dev plan**, taken in the dev
 plan's own task order — not `tasks[]` order, which comes from the sprint doc's
-proof lines and can differ (S5's own plan opens with SK-043, then SK-040). Every
-artifact in the cycle below is keyed by that `N`. `tasks[]` stays the **ledger**
-(invariant 5), not the loop. For each heading, in plan order:
+proof lines and can differ. Every artifact in the cycle below is keyed by that
+`N`. `tasks[]` stays the **ledger** (invariant 5), not the loop. A heading may name
+**several** stories, and one story may be served by **several** headings — S5's own
+plan carries `### Task 1: … (SK-043)` and `### Task 3: … (SK-041, SK-043)`. So the
+branch is over the heading's whole set of stories. For each heading, in plan order:
 
-- it names a story whose `tasks[]` status is already terminal → skip it: a
-  terminal story's plan tasks are **never re-dispatched**, SDD's ledger rule on our
-  ledger;
-- it names a story that is `PENDING` → run the cycle, and record the status against
-  that story;
+- **every** story it names is already terminal → skip it: a terminal story's plan
+  tasks are **never re-dispatched**, SDD's ledger rule on our ledger;
+- it names at least one story that is not terminal → run the cycle, and record a
+  status against **each** story the heading names — including one already recorded
+  by an earlier heading, which is re-recorded here (step 3);
 - it is marked `(process)` → run the cycle, and record **no** status: it serves no
   story, so `tasks[]` has no entry to write. The halt report names it as run.
 
@@ -395,31 +395,37 @@ The cycle:
    | `BLOCKED` | `block --task <SK-0xx> --kind … --found … --option "(a) …" --option "(b) …" --recommend "(a) — because …"`, which flips the status itself. |
    | `NEEDS_CONTEXT` | Supply the missing context and re-dispatch the same task **once**. Still `NEEDS_CONTEXT` → `block`. It is a controller-loop signal, not a resting state, and there is no unbounded loop anywhere in this stage. |
 
-3. **The join is the plan task's heading** — `### Task N: <what> (SK-0xx)`, the
-   one required by PLAN and validated when `tasks` loaded. This stage adds no
-   parser. Where several plan tasks serve one story: the story is `DONE` only when
-   **all** of them are; any `DONE_WITH_CONCERNS` among them makes the story
-   `DONE_WITH_CONCERNS`; any blocker among them blocks the story.
+3. **The join is the plan task's heading** — `### Task N: <what> (SK-0xx)`, the one
+   required by PLAN and validated when `tasks` loaded. This stage adds no parser. Where
+   several headings serve one story, the record stays **eager**: re-record the story as
+   each of its headings lands, and record the roll-up so far — the story is `DONE` only
+   when **all** of its headings are; any `DONE_WITH_CONCERNS` among them makes it
+   `DONE_WITH_CONCERNS`; any blocker among them blocks it. Re-recording is what the verb
+   is for: every attempt is appended to the trail and the **last** status wins in state,
+   so the trail carries the history and state carries the roll-up. Never defer a story's
+   record to its last heading.
 
 **Resume is the loop's boundary, not a step in it.** Re-invoking
-`/supskill run <sprint-id>` restarts the drain at the first `PENDING` task, read
-from `state.json` alone. But `PENDING` does not mean *untouched*: a task may already
-carry commits from a dispatch that crashed after the implementer committed and
-before you recorded the status. The trail records the status, not the SHA — a task's
-`BASE` and its commit list live only in this conversation, and a `/clear` destroys
-them. So before re-dispatching a `PENDING` task, check whether HEAD has moved since
-the last recorded status. If it has, that task is partially implemented, its `BASE`
-is lost, and a re-dispatch would re-record `BASE` at the *current* HEAD, hand the
-reviewer an **empty diff**, and mark unreviewed code `DONE`. That is a **blocker**,
-not a guess.
+`/supskill run <sprint-id>` restarts the heading walk at the first heading whose stories
+are not all terminal — the first `PENDING` task's heading — read from `state.json`
+alone. But `PENDING` does not mean *untouched*: a task may already carry commits from a
+dispatch that crashed after the implementer committed and before you recorded the
+status. The trail records the status, not the SHA — a task's `BASE` and its commit list
+live only in this conversation, and a `/clear` destroys them. So before re-dispatching a
+`PENDING` task, check whether HEAD has moved since the last recorded status. That anchor
+is on disk: compare the newest commit's time (`git log -1 --format=%cI`) with the `at`
+of the last record in the sprint's `.supskill/tasks.jsonl` — reading `.supskill/` is
+*yours* to do, invariant 3 bars a dispatched agent, not you. A commit newer than the
+last recorded status means that task is partially implemented, its `BASE` is lost, and a
+re-dispatch would re-record `BASE` at the *current* HEAD, hand the reviewer an **empty
+diff**, and mark unreviewed code `DONE`. That is a **blocker**, not a guess.
 
-**Downstream is discovered, not predicted.** A blocker stops its chain, not the
-drain. A later task that comes back `BLOCKED` for the **same root cause** — its
-report names the already-blocked story, or the artifact that story was to produce
-— is recorded `task --id <SK-0xx> --status PARKED --note "<the blocker that
-parked it>"`, not blocked a second time. One blocker per root cause; the options
-are enumerated once. What counts as the same root cause is your judgment, and
-this prose does not pretend otherwise.
+**Downstream is discovered, not predicted.** A blocker stops its chain, not the drain. A
+later task that comes back `BLOCKED` for the **same root cause** — its report names the
+already-blocked story, or the artifact that story was to produce — is recorded
+`task --id <SK-0xx> --status PARKED --note "<the blocker that parked it>"`, not blocked
+a second time. One blocker per root cause; the options are enumerated once. What counts
+as the same root cause is your judgment, and this prose does not pretend otherwise.
 
 **`provable` gates the claim, not the run:** every task runs — `provable` is not
 a skip filter. It decides what the halt report may claim about a finished task:
@@ -428,28 +434,28 @@ an `operator` task is *implemented and reviewed, **not proven** — verify by ha
 
 **SDD's two remaining "ask the human" points become blockers, not guesses.**
 
-- A reviewer finding labelled **plan-mandated** — or any finding that
-  contradicts the plan's text — is the human's decision in SDD. Do not dismiss
-  the finding because the plan mandates it, and do not dispatch a fix that
-  contradicts the plan. Record a blocker whose `--found` is the finding beside
-  the plan text that mandates it, and whose options are the two courses that
-  actually exist: fix it against the plan, or keep the plan and carry the
-  finding.
-- A reviewer's "⚠️ cannot verify from diff" item is the opposite case: SDD
-  requires the **controller** to resolve it, and you hold the plan and the
-  cross-task context the reviewer lacks. Resolve it. If you genuinely cannot,
-  block. An empty answer is never a decision.
+- A reviewer finding labelled **plan-mandated** — or any finding that contradicts the
+  plan's text — is the human's decision in SDD. Do not dismiss the finding because the
+  plan mandates it, and do not dispatch a fix that contradicts the plan. Record a blocker
+  whose `--found` is the finding beside the plan text that mandates it, and whose options
+  are the two courses that actually exist: fix it against the plan, or keep the plan and
+  carry the finding.
+- A reviewer's "⚠️ cannot verify from diff" item is the opposite case: SDD requires the
+  **controller** to resolve it, and you hold the plan and the cross-task context the
+  reviewer lacks. Resolve it. If you genuinely cannot, block. An empty answer is never a
+  decision.
 
-**Never guess.** Do not skip a task because it looks hard; do not mark a task
-`DONE` without the task review, on an implementer's word alone; do not
-re-dispatch a task with unchanged input; and do not invent a blocker's options. A
-situation with no legal move is a blocker — and a blocker halts the chain, never
-the drain.
+**Never guess.** Do not skip a task because it looks hard; do not mark a task `DONE`
+without the task review, on an implementer's word alone; do not re-dispatch a task with
+unchanged input; and do not invent a blocker's options. A situation with no legal move is
+a blocker — and a blocker halts the chain, never the drain.
 
 ### The halt
 
-The drain ends when no `PENDING` task remains. Then, **exactly once**, report one
-batch:
+The drain ends when the plan's **last `### Task N` heading has been walked** — not
+when no `PENDING` task remains: a plan's trailing `(process)` headings carry no
+status and would be skipped by that test (S5's own plan ends with two). Then,
+**exactly once**, report one batch:
 
 - **per task:** its status, the commits you observed for it, and what its `provable`
   class does and does not claim (above). The trail carries no SHA, so for a task
@@ -467,9 +473,8 @@ last task. Your job is to leave `<scratch>/review-final.diff` and the `--note`
 roll-ups **on disk** for E6's REVIEW/PAR stage to read — that is where the roll-up
 is spent, and that is why it is not a silent discard.
 
-Then stop. Do not advance to REVIEW, do not open a gate, and do not ask a
-question — Gate 3 is E6's, and until E6 lands the halt report *is* this stage's
-deliverable.
+Then stop. Do not advance to REVIEW, do not open a gate, and do not ask a question —
+Gate 3 is E6's, and until E6 lands the halt report *is* this stage's deliverable.
 
 **A halt is the target shape, not an error.** A sprint that drains 4 of 6 tasks
 and halts with two blockers is a **successful** EXECUTE. Say so in those words.
@@ -477,9 +482,9 @@ Do not apologize for it, and do not try once more.
 
 ### The blocker rules
 
-The CLI already refuses a blocker with fewer than two options, an unlabelled
-option, a duplicate label, or a `--recommend` that names none of them. It cannot
-refuse three phrasings of the same option. That part is yours.
+The CLI already refuses a blocker with fewer than two options, an unlabelled option, a
+duplicate label, or a `--recommend` that names none of them. It cannot refuse three
+phrasings of the same option. That part is yours.
 
 - Options are **materially different courses of action** — do X / do Y / stop and
   change the plan — each labelled `(a) …`, `(b) …`, `(c) …`.
