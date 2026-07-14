@@ -372,13 +372,13 @@ proof lines and can differ. Every artifact in the cycle below is keyed by that
 plan carries `### Task 1: … (SK-043)` and `### Task 3: … (SK-041, SK-043)`. So the
 branch is over the heading's whole set of stories. For each heading, in plan order:
 
-- **every** story it names is already terminal → skip it: a terminal story's plan
-  tasks are **never re-dispatched**, SDD's ledger rule on our ledger;
-- it names at least one story that is not terminal → run the cycle, and record a
-  status against **each** story the heading names — including one already recorded
-  by an earlier heading, which is re-recorded here (step 3);
 - it is marked `(process)` → run the cycle, and record **no** status: it serves no
-  story, so `tasks[]` has no entry to write. The halt report names it as run.
+  story, so `tasks[]` has no entry to write. The halt report names it as run;
+- otherwise, **every** story it names is already terminal → skip it: a terminal
+  story's plan tasks are **never re-dispatched**, SDD's ledger rule on our ledger;
+- otherwise, it names at least one story that is not terminal → run the cycle, and
+  record a status against **each** story the heading names — including one already
+  recorded by an earlier heading, which is re-recorded here (step 3).
 
 The cycle:
 
@@ -413,12 +413,13 @@ dispatch that crashed after the implementer committed and before you recorded th
 status. The trail records the status, not the SHA — a task's `BASE` and its commit list
 live only in this conversation, and a `/clear` destroys them. So before re-dispatching a
 `PENDING` task, check whether HEAD has moved since the last recorded status. That anchor
-is on disk: compare the newest commit's time (`git log -1 --format=%cI`) with the `at`
-of the last record in the sprint's `.supskill/tasks.jsonl` — reading `.supskill/` is
-*yours* to do, invariant 3 bars a dispatched agent, not you. A commit newer than the
-last recorded status means that task is partially implemented, its `BASE` is lost, and a
-re-dispatch would re-record `BASE` at the *current* HEAD, hand the reviewer an **empty
-diff**, and mark unreviewed code `DONE`. That is a **blocker**, not a guess.
+is on disk. Compare the newest commit's time with the `at` of the last record in
+`.supskill/runs/<sprint-id>/tasks.jsonl`: both sides must be UTC, or the string compare is
+not an instant compare. The trail's `at` is UTC by enforcement, and a bare `%cI` prints local
+time, so read the commit's time with `TZ=UTC git log -1 --date=iso-strict-local --format=%cd`.
+A commit newer than the last recorded status means that task is partially implemented, its
+`BASE` is lost, and a re-dispatch would re-record `BASE` at the *current* HEAD, hand the
+reviewer an **empty diff**, and mark unreviewed code `DONE`. That is a **blocker**, not a guess.
 
 **Downstream is discovered, not predicted.** A blocker stops its chain, not the drain. A
 later task that comes back `BLOCKED` for the **same root cause** — its report names the
