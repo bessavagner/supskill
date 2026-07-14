@@ -14,7 +14,7 @@
 
 Copied from the sprint spec (`docs/plans/sprints/backlog-01/sprint-s5-execute-drain.md`) and the standing project rules. Every task's requirements implicitly include this section.
 
-- **Tests:** `uv run pytest`. The suite is **pure offline** — no LLM call, no subagent, no network, anywhere under `tests/`. Baseline at commit `5fd62d1`: **204 passed in ~0.4s**. Every task ends with the full suite green.
+- **Tests:** `uv run pytest`. The suite is **pure offline** — no LLM call, no subagent, no network, anywhere under `tests/`. Baseline at commit `3ace2cb`: **208 passed in ~0.5s**. Every task ends with the full suite green.
 - **Lint:** `uv run ruff check` must stay clean. Config is `pyproject.toml:22-32` — `line-length = 120`, rules `E,F,I,B,UP`, `src = ["scripts", "tests"]`. Every code block in this plan is written to pass those rules as-is: `from __future__ import annotations` where the module needs it, no unused imports, no line over 120 chars.
 - **Zero runtime dependencies:** `pyproject.toml` `[project] dependencies = []` (`pyproject.toml:6`), enforced by `tests/test_scaffold.py`. Nothing this sprint needs a dependency.
 - **No AI attribution of any kind in commit messages or bodies** — no `Co-Authored-By`, no "Generated with" line, no mention of Claude/Anthropic/AI. Absolute; overrides any harness default.
@@ -380,7 +380,7 @@ def _cmd_task(args) -> int:
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/test_task_status.py -v && uv run pytest && uv run ruff check`
-Expected: all PASS — 204 baseline + the new tests. `tests/test_demo.py:53-65` (no module outside `store.py` opens a file for writing) stays green: `record_task_status` writes only through `store`.
+Expected: all PASS — 208 baseline + the new tests. `tests/test_demo.py:53-65` (no module outside `store.py` opens a file for writing) stays green: `record_task_status` writes only through `store`.
 
 - [ ] **Step 6: Commit**
 
