@@ -130,7 +130,7 @@ def _parse_stage(value, where: str) -> Stage:
         ) from None
 
 
-def _parse_status(value, where: str) -> TaskStatus:
+def parse_task_status(value, where: str) -> TaskStatus:
     if value == "NEEDS_CONTEXT":
         raise StateError(
             f"{where}: NEEDS_CONTEXT is a controller-loop signal, not a task state - "
@@ -228,7 +228,7 @@ def state_from_dict(raw: dict) -> State:
                 id=_req_str(task_raw, "id", where),
                 seam=_req_str(task_raw, "seam", where),
                 provable=_req_str(task_raw, "provable", where),
-                status=_parse_status(_require(task_raw, "status", where), f"{where}.status"),
+                status=parse_task_status(_require(task_raw, "status", where), f"{where}.status"),
             )
         )
     return State(

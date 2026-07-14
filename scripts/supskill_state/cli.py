@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_artifact(subparsers)
     _add_gate(subparsers)
     _add_block(subparsers)
+    _add_task(subparsers)
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
@@ -117,6 +118,32 @@ def _add_block(subparsers) -> None:
 def _cmd_block(args) -> int:
     commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
     print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
+    return 0
+
+
+def _add_task(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "task",
+        help="record one task's SDD-reported status (DONE|DONE_WITH_CONCERNS|PARKED)",
+    )
+    sub.add_argument("--id", required=True, dest="task_id", help="the story id, e.g. SK-041")
+    sub.add_argument(
+        "--status",
+        required=True,
+        help="DONE | DONE_WITH_CONCERNS | PARKED (BLOCKED belongs to `block`; NEEDS_CONTEXT is not a state)",
+    )
+    sub.add_argument(
+        "--note",
+        help="required for DONE_WITH_CONCERNS (the concern, verbatim); on DONE it carries the "
+             "Minor-findings roll-up; on PARKED it names the blocker that parked the task",
+    )
+    sub.set_defaults(func=_cmd_task)
+
+
+def _cmd_task(args) -> int:
+    state = commands.record_task_status(args.task_id, args.status, note=args.note)
+    task = next(t for t in state.tasks if t.id == args.task_id)
+    print(f"recorded {task.id}: {task.status.value}")
     return 0
 
 

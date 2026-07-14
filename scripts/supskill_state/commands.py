@@ -27,6 +27,7 @@ from .model import (
     State,
     Task,
     TaskStatus,
+    parse_task_status,
     state_to_dict,
 )
 from .plan_coverage import validate_plan_coverage
@@ -324,6 +325,65 @@ def load_tasks(
         for proof in proofs
     ]
     store.dump_state(state, store.state_path(root))
+    return state
+
+
+def record_task_status(
+    task_id: str,
+    status: str,
+    note: str | None = None,
+    root: Path | None = None,
+) -> State:
+    """Record an SDD-reported status for one task (SK-043).
+
+    The missing half of the spine. DONE, DONE_WITH_CONCERNS and PARKED have been
+    in TaskStatus since S1 and nothing could write them: `tasks` writes PENDING,
+    `block` writes BLOCKED. So advance --to REVIEW - which refuses while any task
+    is non-terminal - was unsatisfiable for any task that succeeded, and no sprint
+    could ever end.
+
+    Concerns get an append-only trail (runs/<id>/tasks.jsonl) rather than a schema
+    field: trail FIRST, state SECOND, exactly like gates.jsonl and blockers.jsonl.
+    Re-recording is legal and appends - last status wins in state, every attempt
+    stays in the trail. Gate 3 (E6) reads the trail; nothing re-parses prose.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    if not task_id:
+        raise StateError("a status record requires a non-empty --id")
+    # the model owns the vocabulary: NEEDS_CONTEXT and unknown statuses raise ITS message
+    parsed = parse_task_status(status, "task --status")
+    if parsed is TaskStatus.BLOCKED:
+        raise StateError(
+            "BLOCKED is `block`'s transition, not this verb's: a task is blocked by recording a "
+            "blocker WITH its options - a conductor that could set BLOCKED with a bare status "
+            "could halt with a shrug"
+        )
+    if parsed is TaskStatus.PENDING:
+        raise StateError(
+            "PENDING is where `tasks` starts every task; it is not a status a task is moved TO. "
+            "Nothing in this spine walks a task backwards"
+        )
+    if parsed is TaskStatus.DONE_WITH_CONCERNS and not (note or "").strip():
+        raise StateError(
+            "DONE_WITH_CONCERNS requires --note: a concern with no text is not a concern, and "
+            "Gate 3 reads this trail rather than the conductor's memory"
+        )
+
+    state = store.load_state(store.state_path(root))
+    task = next((t for t in state.tasks if t.id == task_id), None)
+    if task is None:
+        raise StateError(
+            f"no task {task_id!r} in state.json - a status must attach to a known task; "
+            "this verb never creates one"
+        )
+
+    tasks_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "tasks.jsonl"
+    store.append_jsonl(  # trail FIRST
+        tasks_file,
+        {"task": task_id, "status": parsed.value, "note": note, "at": store.now_utc_iso()},
+    )
+    task.status = parsed
+    store.dump_state(state, store.state_path(root))  # state SECOND
     return state
 
 
