@@ -348,7 +348,87 @@ Durable Progress and Red Flags are the contract you are composing.
   implementer's word alone. An implementer that can write state can mark its own
   work done.
 
-The drain that uses all of this is the next subsection.
+### The drain
+
+In plan order, for every task in `tasks[]` whose status is `PENDING`:
+
+1. Record `BASE` (`git rev-parse HEAD`), write the brief, dispatch a fresh
+   implementer, then the task reviewer, then a fix subagent on any Critical or
+   Important finding. That is SDD's cycle, unchanged.
+2. Map what SDD reported onto the spine, **before the next dispatch begins** — a
+   `/clear` or a crash mid-drain then costs at most one task's work:
+
+   | SDD reports | You run |
+   |---|---|
+   | `DONE` | `task --id <SK-0xx> --status DONE` — `--note` carries the task's Minor-findings roll-up, which the final whole-branch review reads. A roll-up nobody reads is a silent discard. |
+   | `DONE_WITH_CONCERNS` | `task --id <SK-0xx> --status DONE_WITH_CONCERNS --note "<the concern, verbatim>"`. The drain continues; the concern surfaces in the halt batch. |
+   | `BLOCKED` | `block --task <SK-0xx> --kind … --found … --option "(a) …" --option "(b) …" --recommend "(a) — because …"`, which flips the status itself. |
+   | `NEEDS_CONTEXT` | Supply the missing context and re-dispatch the same task **once**. Still `NEEDS_CONTEXT` → `block`. It is a controller-loop signal, not a resting state, and there is no unbounded loop anywhere in this stage. |
+
+3. **The join is the plan task's heading** — `### Task N: <what> (SK-0xx)`, the
+   one required by PLAN and validated when `tasks` loaded. This stage adds no
+   parser. A heading marked `(process)` serves no story and gets no status call.
+   Where several plan tasks serve one story: the story is `DONE` only when **all**
+   of them are; any `DONE_WITH_CONCERNS` among them makes the story
+   `DONE_WITH_CONCERNS`; any blocker among them blocks the story.
+4. A task already terminal in `tasks[]` is skipped and **never re-dispatched** —
+   SDD's ledger rule, on our ledger. This is also the resume path: re-invoking
+   `/supskill run <sprint-id>` restarts the drain at the first `PENDING` task,
+   read from `state.json` alone.
+
+**Downstream is discovered, not predicted.** A blocker stops its chain, not the
+drain. A later task that comes back `BLOCKED` for the **same root cause** — its
+report names the already-blocked story, or the artifact that story was to produce
+— is recorded `task --id <SK-0xx> --status PARKED --note "<the blocker that
+parked it>"`, not blocked a second time. One blocker per root cause; the options
+are enumerated once. What counts as the same root cause is your judgment, and
+this prose does not pretend otherwise.
+
+**`provable` gates the claim, not the run.** every task runs — `provable` is not
+a skip filter. It decides what the halt report may claim about a finished task:
+an `offline` task is *proven*, with its test command and that command's output;
+an `operator` task is *implemented and reviewed, **not proven** — verify by hand*.
+
+**SDD's two remaining "ask the human" points become blockers, not guesses.**
+
+- A reviewer finding labelled **plan-mandated** — or any finding that
+  contradicts the plan's text — is the human's decision in SDD. Do not dismiss
+  the finding because the plan mandates it, and do not dispatch a fix that
+  contradicts the plan. Record a blocker whose `--found` is the finding beside
+  the plan text that mandates it, and whose options are the two courses that
+  actually exist: fix it against the plan, or keep the plan and carry the
+  finding.
+- A reviewer's "⚠️ cannot verify from diff" item is the opposite case: SDD
+  requires the **controller** to resolve it, and you hold the plan and the
+  cross-task context the reviewer lacks. Resolve it. If you genuinely cannot,
+  block. An empty answer is never a decision.
+
+**Never guess.** Do not skip a task because it looks hard; do not mark a task
+`DONE` without the task review, on an implementer's word alone; do not
+re-dispatch a task with unchanged input; and do not invent a blocker's options. A
+situation with no legal move is a blocker — and a blocker halts the chain, never
+the drain.
+
+### The halt
+
+The drain ends when no `PENDING` task remains. Then, **exactly once**, report one
+batch:
+
+- **per task:** its status, its commits, and what its `provable` class does and
+  does not claim (above);
+- **every blocker:** its `found`, its `options[]`, and its `recommend`;
+- **every parked task:** with the blocker that parked it;
+- **every `DONE_WITH_CONCERNS` concern:** verbatim;
+- **any stale `.superpowers/sdd/progress.md`** found on disk: named once, so the
+  operator can delete it.
+
+Then stop. Do not advance to REVIEW, do not open a gate, and do not ask a
+question — Gate 3 is E6's, and until E6 lands the halt report *is* this stage's
+deliverable.
+
+**A halt is the target shape, not an error.** A sprint that drains 4 of 6 tasks
+and halts with two blockers is a **successful** EXECUTE. Say so in those words.
+Do not apologize for it, and do not try once more.
 
 ## Reference
 

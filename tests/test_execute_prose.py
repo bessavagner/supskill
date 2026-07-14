@@ -80,3 +80,52 @@ def test_the_execute_section_stops_before_dispatching_on_the_default_branch():
 def test_supskill_contributes_no_fourth_prompt_template():
     # the implementer and reviewer prompts are SDD's; supskill has no opinion (D1)
     assert not (SKILL_DIR / "references" / "execute-prompt.md").exists()
+
+
+def test_the_drain_maps_all_four_sdd_statuses_onto_a_verb():
+    section = execute_section()
+    assert "`task --id <SK-0xx> --status DONE`" in section
+    assert "--status DONE_WITH_CONCERNS --note" in section
+    assert "`block --task <SK-0xx>" in section
+    assert "re-dispatch the same task **once**" in section  # NEEDS_CONTEXT is bounded
+
+
+def test_the_drain_writes_each_status_before_the_next_dispatch():
+    assert "before the next dispatch begins" in execute_section()
+
+
+def test_the_drain_skips_terminal_tasks_and_resumes_from_state_alone():
+    section = execute_section()
+    assert "never re-dispatched" in section
+    assert "the first `PENDING` task" in section
+
+
+def test_downstream_is_discovered_not_predicted():
+    section = execute_section()
+    assert "same root cause" in section
+    assert "--status PARKED" in section
+
+
+def test_provable_gates_the_claim_and_not_the_run():
+    section = execute_section()
+    assert "**not proven** — verify by hand" in section
+    assert "every task runs" in section
+
+
+def test_the_halt_happens_exactly_once_and_advances_nothing():
+    section = execute_section()
+    assert "**exactly once**" in section
+    assert "Do not advance to REVIEW" in section
+    assert "A halt is the target shape, not an error" in section
+
+
+def test_sdds_two_remaining_human_decisions_become_blockers_or_resolutions():
+    section = execute_section()
+    assert "plan-mandated" in section
+    assert "cannot verify from diff" in section
+
+
+def test_the_drain_never_guesses():
+    section = execute_section()
+    assert "do not invent a blocker's options" in section
+    assert "without the task review" in section
