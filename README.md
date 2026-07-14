@@ -86,10 +86,10 @@ Two pieces, deliberately.
 **`supskill-state`** — a pure-Python CLI, zero runtime dependencies. It is the only thing on earth permitted to write `state.json`, and every transition validates its preconditions before it will move:
 
 ```
-init · show · artifact · gate · block · tasks · advance · plan-guard
+init · show · artifact · gate · block · task · tasks · advance · plan-guard · cost
 ```
 
-`advance --to PLAN` refuses without an approved Gate 1. `advance --to EXECUTE` refuses without an approved Gate 2, and refuses an empty task list. `advance --to REVIEW` refuses while any task is non-terminal. `block` refuses a blocker carrying fewer than two options, or a recommendation that doesn't name one of them — because a blocker without real options is a shrug, not a decision.
+`advance --to PLAN` refuses without an approved Gate 1. `advance --to EXECUTE` refuses without an approved Gate 2, and refuses an empty task list. `advance --to REVIEW` refuses while any task is non-terminal. `block` refuses a blocker carrying fewer than two options, or a recommendation that doesn't name one of them — because a blocker without real options is a shrug, not a decision. `task` is the only verb that can finish one (`DONE` / `DONE_WITH_CONCERNS` / `PARKED`). `cost` is pure telemetry — it records a subagent dispatch's token/tool/duration usage and never touches `state.json` — so the open question of whether a given stage earns its keep in tokens gets answered from real numbers instead of guesswork.
 
 If the CLI refuses, the conductor reports the refusal verbatim and stops. It never works around one.
 
@@ -103,9 +103,11 @@ The state spine is the only part of an agentic system that can be proven correct
 
 ```console
 $ uv run pytest -q
-........................................................................ [ 69%]
-................................................................         [100%]
-208 passed in 0.49s
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+...................................                                      [100%]
+251 passed in 0.60s
 ```
 
 No LLM calls. No network. No subagents. No flake. The suite proves the gates cannot be skipped, and it runs faster than you can read this sentence.
@@ -120,7 +122,7 @@ Requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
 git clone https://github.com/bessavagner/supskill.git
 cd supskill
 uv sync
-uv run pytest -q          # 208 passing, offline, <1s
+uv run pytest -q          # 251 passing, offline, <1s
 ```
 
 Install as a Claude Code plugin:
@@ -157,14 +159,14 @@ Alpha, and honest about it. Built in public, one sprint at a time — **by itsel
 | **E2** | Conductor skill + plugin skeleton | ✅ shipped |
 | **E3** | SCOPE + REFINE + Gate 1 — *the heart* | ✅ shipped |
 | **E4** | PLAN + Gate 2 | ✅ shipped |
-| **E5** | EXECUTE — drain-then-halt | 📋 planned (23 pts) |
+| **E5** | EXECUTE — drain-then-halt | ✅ shipped |
 | **E6** | REVIEW (PAR) + Gate 3 + replan | ⬜ backlog |
 | **E7** | Packaging & distribution | ⬜ backlog |
 | **E8** | Validation — *drive a real sprint or don't ship* | ⬜ backlog |
 
 ## What the evidence actually says
 
-supskill plans its own sprints. Every sprint doc in [`docs/plans/sprints/`](docs/plans/sprints/) was produced by the conductor running against its own backlog — including the one for the stage that doesn't exist yet.
+supskill plans its own sprints. Every sprint doc in [`docs/plans/sprints/`](docs/plans/sprints/) was produced by the conductor running against its own backlog — including the one for the EXECUTE stage, written before that stage existed.
 
 That dogfooding produced the project's most interesting result. **Five sprints; five times the refinement pass grew the scope; five times the sharpest finding was structural — and not one of them was visible from the backlog's own one-line description of the story.** A sample:
 
