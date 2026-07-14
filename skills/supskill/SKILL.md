@@ -291,13 +291,26 @@ Durable Progress and Red Flags are the contract you are composing.
 
 ### Before the first dispatch — four checks, in this order
 
-1. **The branch check.** Run `git rev-parse --abbrev-ref HEAD`. If it is the
-   repo's default branch, **stop before dispatching anything**: report that
-   EXECUTE writes commits and will not write them to the default branch, and name
-   `git switch -c <branch>` as the operator's move. Do not create, switch, or
-   delete a branch yourself — the same restraint that keeps `--archive` out of
-   your hands. (SDD forbids implementing on main without explicit consent, and a
-   subagent cannot give it.)
+SDD's three scripts — `sdd-workspace`, `task-brief`, `review-package` — live in
+the installed superpowers plugin: not on `PATH`, and **not** under
+`${CLAUDE_PLUGIN_ROOT}` (that is *this* plugin). Resolve their directory once from
+the loaded `subagent-driven-development` skill's own location, invoke each by
+absolute path, and **never re-implement one** — a hand-rolled `task-brief` hands
+the implementer a brief that is not SDD's, which is exactly the D1 violation this
+stage exists to avoid.
+
+1. **The branch check.** Derive the default branch, never assume it: it is what
+   `git symbolic-ref --short refs/remotes/origin/HEAD` names with `origin/`
+   stripped; with no `origin`, what `git config --get init.defaultBranch` names,
+   falling back to `main`. Then run `git rev-parse --abbrev-ref HEAD`. If that is
+   the default branch, **stop before dispatching anything**: report that EXECUTE
+   writes commits and will not write them to the default branch, and name
+   `git switch -c <branch>` as the operator's move. If it returns the literal
+   `HEAD`, you are on a **detached HEAD** — not a branch, and every commit made
+   there is one `git switch` from unreachable. Stop exactly the same way, and name
+   the same move. Do not create, switch, or delete a branch yourself — the same
+   restraint that keeps `--archive` out of your hands. (SDD forbids implementing on
+   main without explicit consent, and a subagent cannot give it.)
 2. **Prepare the scratch.** Run SDD's `sdd-workspace` script once — it creates
    `.superpowers/sdd/` and writes the self-ignoring `.gitignore` that keeps every
    sprint's scratch out of `git status`. Then `mkdir -p <scratch>`, where
@@ -328,8 +341,11 @@ Durable Progress and Red Flags are the contract you are composing.
 - **`BASE` is recorded, never derived.** Before each implementer dispatch, run
   `git rev-parse HEAD` and keep that SHA as the task's `BASE`. **Never `HEAD~1`**
   — SDD says in as many words that it silently drops all but the last commit of a
-  multi-commit task. The final whole-branch review gets its own package:
-  `review-package $(git merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`.
+  multi-commit task. EXECUTE also **produces** the final whole-branch review's
+  package — an output it leaves for E6, never an input it consumes (see **The
+  halt**):
+  `review-package $(git merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`,
+  with `<default-branch>` derived exactly as in the branch check.
   `sprint.branch` is optional at init and is not the authority here — `git` is.
 - **Every dispatch names its model explicitly.** An omitted model silently
   inherits this session's — usually the most capable and most expensive one.
@@ -350,7 +366,21 @@ Durable Progress and Red Flags are the contract you are composing.
 
 ### The drain
 
-In plan order, for every task in `tasks[]` whose status is `PENDING`:
+The unit of work is a **`### Task N` heading in the dev plan**, taken in the dev
+plan's own task order — not `tasks[]` order, which comes from the sprint doc's
+proof lines and can differ (S5's own plan opens with SK-043, then SK-040). Every
+artifact in the cycle below is keyed by that `N`. `tasks[]` stays the **ledger**
+(invariant 5), not the loop. For each heading, in plan order:
+
+- it names a story whose `tasks[]` status is already terminal → skip it: a
+  terminal story's plan tasks are **never re-dispatched**, SDD's ledger rule on our
+  ledger;
+- it names a story that is `PENDING` → run the cycle, and record the status against
+  that story;
+- it is marked `(process)` → run the cycle, and record **no** status: it serves no
+  story, so `tasks[]` has no entry to write. The halt report names it as run.
+
+The cycle:
 
 1. Record `BASE` (`git rev-parse HEAD`), write the brief, dispatch a fresh
    implementer, then the task reviewer, then a fix subagent on any Critical or
@@ -360,21 +390,28 @@ In plan order, for every task in `tasks[]` whose status is `PENDING`:
 
    | SDD reports | You run |
    |---|---|
-   | `DONE` | `task --id <SK-0xx> --status DONE` — `--note` carries the task's Minor-findings roll-up, which the final whole-branch review reads. A roll-up nobody reads is a silent discard. |
+   | `DONE` | `task --id <SK-0xx> --status DONE` — `--note` carries the task's Minor-findings roll-up, which E6's final whole-branch review reads. A roll-up nobody reads is a silent discard. |
    | `DONE_WITH_CONCERNS` | `task --id <SK-0xx> --status DONE_WITH_CONCERNS --note "<the concern, verbatim>"`. The drain continues; the concern surfaces in the halt batch. |
    | `BLOCKED` | `block --task <SK-0xx> --kind … --found … --option "(a) …" --option "(b) …" --recommend "(a) — because …"`, which flips the status itself. |
    | `NEEDS_CONTEXT` | Supply the missing context and re-dispatch the same task **once**. Still `NEEDS_CONTEXT` → `block`. It is a controller-loop signal, not a resting state, and there is no unbounded loop anywhere in this stage. |
 
 3. **The join is the plan task's heading** — `### Task N: <what> (SK-0xx)`, the
    one required by PLAN and validated when `tasks` loaded. This stage adds no
-   parser. A heading marked `(process)` serves no story and gets no status call.
-   Where several plan tasks serve one story: the story is `DONE` only when **all**
-   of them are; any `DONE_WITH_CONCERNS` among them makes the story
+   parser. Where several plan tasks serve one story: the story is `DONE` only when
+   **all** of them are; any `DONE_WITH_CONCERNS` among them makes the story
    `DONE_WITH_CONCERNS`; any blocker among them blocks the story.
-4. A task already terminal in `tasks[]` is skipped and **never re-dispatched** —
-   SDD's ledger rule, on our ledger. This is also the resume path: re-invoking
-   `/supskill run <sprint-id>` restarts the drain at the first `PENDING` task,
-   read from `state.json` alone.
+
+**Resume is the loop's boundary, not a step in it.** Re-invoking
+`/supskill run <sprint-id>` restarts the drain at the first `PENDING` task, read
+from `state.json` alone. But `PENDING` does not mean *untouched*: a task may already
+carry commits from a dispatch that crashed after the implementer committed and
+before you recorded the status. The trail records the status, not the SHA — a task's
+`BASE` and its commit list live only in this conversation, and a `/clear` destroys
+them. So before re-dispatching a `PENDING` task, check whether HEAD has moved since
+the last recorded status. If it has, that task is partially implemented, its `BASE`
+is lost, and a re-dispatch would re-record `BASE` at the *current* HEAD, hand the
+reviewer an **empty diff**, and mark unreviewed code `DONE`. That is a **blocker**,
+not a guess.
 
 **Downstream is discovered, not predicted.** A blocker stops its chain, not the
 drain. A later task that comes back `BLOCKED` for the **same root cause** — its
@@ -384,7 +421,7 @@ parked it>"`, not blocked a second time. One blocker per root cause; the options
 are enumerated once. What counts as the same root cause is your judgment, and
 this prose does not pretend otherwise.
 
-**`provable` gates the claim, not the run.** every task runs — `provable` is not
+**`provable` gates the claim, not the run:** every task runs — `provable` is not
 a skip filter. It decides what the halt report may claim about a finished task:
 an `offline` task is *proven*, with its test command and that command's output;
 an `operator` task is *implemented and reviewed, **not proven** — verify by hand*.
@@ -414,13 +451,21 @@ the drain.
 The drain ends when no `PENDING` task remains. Then, **exactly once**, report one
 batch:
 
-- **per task:** its status, its commits, and what its `provable` class does and
-  does not claim (above);
+- **per task:** its status, the commits you observed for it, and what its `provable`
+  class does and does not claim (above). The trail carries no SHA, so for a task
+  drained before a `/clear` the commits may be unrecoverable: say that, and never
+  reconstruct them by guessing at `git log`;
+- **every `(process)` task:** named as run — it carries no status by design;
 - **every blocker:** its `found`, its `options[]`, and its `recommend`;
 - **every parked task:** with the blocker that parked it;
 - **every `DONE_WITH_CONCERNS` concern:** verbatim;
 - **any stale `.superpowers/sdd/progress.md`** found on disk: named once, so the
   operator can delete it.
+
+The final whole-branch review is **E6's**, and EXECUTE dispatches nothing after the
+last task. Your job is to leave `<scratch>/review-final.diff` and the `--note`
+roll-ups **on disk** for E6's REVIEW/PAR stage to read — that is where the roll-up
+is spent, and that is why it is not a silent discard.
 
 Then stop. Do not advance to REVIEW, do not open a gate, and do not ask a
 question — Gate 3 is E6's, and until E6 lands the halt report *is* this stage's
