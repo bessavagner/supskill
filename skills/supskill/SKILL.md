@@ -91,11 +91,11 @@ Copy this checklist into your response and check items off as you go.
 | `SCOPE` | Follow **The SCOPE stage** below. |
 | `REFINE` | Follow **The REFINE stage** below. |
 | `PLAN` | Follow **The PLAN stage** below. |
-| `EXECUTE` | Report: "EXECUTE is not implemented yet — it lands with E5 (drain-then-halt)." Add: the recorded `artifacts.dev_plan` is the plan EXECUTE will drive. Stop. |
+| `EXECUTE` | Follow **The EXECUTE stage** below. |
 | `REVIEW` | Report: "REVIEW is not implemented yet — it lands with E6 (PAR + Gate 3)." Stop. |
 
-EXECUTE and REVIEW are honest stubs until their epics land — do not improvise a
-stage. An implemented stage follows its section below exactly.
+REVIEW is a stub until E6 lands — do not improvise it. An implemented stage
+follows its section below exactly.
 
 ## The SCOPE stage
 
@@ -171,8 +171,7 @@ consent lives here, in the conductor, and nowhere else.
 3. **Record verbatim.** A non-empty answer — the selected label plus any free
    text, unedited — goes to:
    `gate --id G1 --decision <approved|rejected> --response "<verbatim>"`
-4. `approved` → `advance --to PLAN` → continue at the `PLAN` dispatch row
-   (E4's honest stub: it reports and stops — do not improvise PLAN).
+4. `approved` → `advance --to PLAN` → continue at **The PLAN stage** (below).
 5. `rejected` → the decision is recorded and final for this pass; report it
    and stop, naming the rework loop: the operator edits the doc directly or
    asks for a fresh REFINE pass, then re-invokes `/supskill run <sprint-id>`
@@ -258,8 +257,9 @@ nowhere else.
 3. **Record verbatim.** A non-empty answer — the selected label plus any free
    text, unedited — goes to:
    `gate --id G2 --decision <approved|rejected> --response "<verbatim>"`
-4. `approved` → `advance --to EXECUTE` → continue at the `EXECUTE` dispatch row
-   (E5's honest stub: it reports and stops — do not improvise EXECUTE).
+4. `approved` → `advance --to EXECUTE` → continue at **The EXECUTE stage**
+   (below). That transition also re-checks that `tasks[]` is non-empty; a
+   refusal there is reported verbatim and stops the run.
 5. `rejected` → the decision is recorded and final for this pass; report it and
    stop, naming the rework loop: PLAN's resume idempotence means re-invoking
    `/supskill run <sprint-id>` with the rejected plan still recorded and still
@@ -271,6 +271,84 @@ nowhere else.
    dispatches again — that is the operator's call to make, never the
    conductor's: the conductor never deletes an artifact. The last decision
    wins in state while every attempt stays in the trail.
+
+## The EXECUTE stage
+
+**You are the controller.** Invoke `superpowers:subagent-driven-development` in
+**your own session** and run its loop yourself — that is the same-session mode
+SDD's own decision tree names. Do not hand the loop to a subagent: the loop is
+where every status, blocker and concern appears, and a subagent can neither run
+`supskill-state` (invariant 3) nor ask the operator anything (D4). The
+fresh-context boundary is still there — SDD puts it per *task*, which is where
+it belongs.
+
+Compose SDD verbatim (D1): its implementer prompt, its task-reviewer prompt, its
+review loop, its fix loop, its model selection. supskill re-implements none of
+it and adds no prompt template of its own. What supskill adds is the discipline
+below. **Read SDD's SKILL.md and its three `scripts/` before the first
+dispatch** — Model Selection, Handling Implementer Status, File Handoffs,
+Durable Progress and Red Flags are the contract you are composing.
+
+### Before the first dispatch — four checks, in this order
+
+1. **The branch check.** Run `git rev-parse --abbrev-ref HEAD`. If it is the
+   repo's default branch, **stop before dispatching anything**: report that
+   EXECUTE writes commits and will not write them to the default branch, and name
+   `git switch -c <branch>` as the operator's move. Do not create, switch, or
+   delete a branch yourself — the same restraint that keeps `--archive` out of
+   your hands. (SDD forbids implementing on main without explicit consent, and a
+   subagent cannot give it.)
+2. **Prepare the scratch.** Run SDD's `sdd-workspace` script once — it creates
+   `.superpowers/sdd/` and writes the self-ignoring `.gitignore` that keeps every
+   sprint's scratch out of `git status`. Then `mkdir -p <scratch>`, where
+   `<scratch>` is `sprint.scratch` from `show --json`. **Neither is optional.**
+   `task-brief` writes its `OUTFILE` with a plain shell redirect and never
+   creates the parent, so the first brief dies on a missing directory; and
+   passing `OUTFILE` is exactly what skips `sdd-workspace`'s own call, so a
+   target repo that does not already ignore `.superpowers/` will let an
+   implementer's `git add -A` commit this sprint's briefs and diffs.
+3. **Read the plan.** `artifacts.dev_plan` from `show --json` is the plan, and
+   the only authority for it. Missing from disk → report that and stop.
+4. **SDD's pre-flight plan review.** Scan the plan once for conflicts, as SDD
+   requires. SDD batches them into one question to a human; you have none. Every
+   conflict becomes a blocker on the task it affects — with real options, per the
+   blocker rules below — and that task is parked. If the scan blocks every task,
+   the drain runs nothing and the halt is immediate. That is correct, and it is
+   not a crash.
+
+### The dispatch discipline — every task, no exceptions
+
+- **Every scratch path is passed explicitly, and derived, never typed**
+  (invariant 4). `<scratch>` is `sprint.scratch` from `show --json`:
+  - brief: `task-brief <dev_plan> <N> <scratch>/task-<N>-brief.md`
+  - report: `<scratch>/task-<N>-report.md` — named after the brief, per SDD's
+    File Handoffs rule, so re-reading a task's outcome is one `Read`, never a
+    re-dispatch
+  - review package: `review-package <BASE> HEAD <scratch>/review-<N>.diff`
+- **`BASE` is recorded, never derived.** Before each implementer dispatch, run
+  `git rev-parse HEAD` and keep that SHA as the task's `BASE`. **Never `HEAD~1`**
+  — SDD says in as many words that it silently drops all but the last commit of a
+  multi-commit task. The final whole-branch review gets its own package:
+  `review-package $(git merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`.
+  `sprint.branch` is optional at init and is not the authority here — `git` is.
+- **Every dispatch names its model explicitly.** An omitted model silently
+  inherits this session's — usually the most capable and most expensive one.
+  *Which* model per role is SDD's Model Selection section's call, not this
+  skill's; do not restate it, follow it.
+- **The ledger is `state.json`.** Do not read or write `.superpowers/sdd/progress.md`.
+  It is keyed by task number, task numbers restart every sprint, and its
+  contract is "listed complete = do not re-dispatch" — so a ledger left by one
+  sprint tells the next that its Task 1 is already finished. `tasks[]` is the ledger:
+  sprint-scoped by construction, and the file you resume from (invariant 5). A
+  stale `progress.md` on disk is ignored and named once in the halt report, so
+  the operator can delete it.
+- **No dispatched agent runs `supskill-state`** or touches `.supskill/`
+  (invariant 3). SDD's implementers commit code; you record every status, every
+  blocker and every advance yourself — **after** the task review, never on an
+  implementer's word alone. An implementer that can write state can mark its own
+  work done.
+
+The drain that uses all of this is the next subsection.
 
 ## Reference
 
