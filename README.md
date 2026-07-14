@@ -124,7 +124,23 @@ uv sync
 uv run pytest -q          # 204 passing, offline, <1s
 ```
 
-Install as a Claude Code plugin, then drive a sprint from any repo with a markdown backlog:
+Install as a Claude Code plugin:
+
+```bash
+claude plugin marketplace add bessavagner/supskill
+claude plugin install supskill@supskill
+```
+
+supskill **composes** skills that ship in other plugins rather than reimplementing them (invariant 1), so it declares them as dependencies and Claude Code resolves them for you at install time:
+
+| Dependency | Provides | Used by |
+|---|---|---|
+| `superpowers` | `writing-plans`, `subagent-driven-development` | PLAN, EXECUTE |
+| `pm-execution` | `sprint-plan` | SCOPE |
+
+Both live in marketplaces other than supskill's own, and Claude Code blocks cross-marketplace dependencies by default — so supskill's `marketplace.json` names them explicitly in `allowCrossMarketplaceDependenciesOn`. A test asserts that **every skill the conductor dispatches has its plugin declared**: an undeclared skill wouldn't crash a stage, it would make the stage *improvise*, and silent guessing at a stage boundary is the one thing this product exists to prevent.
+
+Then drive a sprint from any repo with a markdown backlog:
 
 ```
 /supskill run s1 --backlog docs/plans/sprints/backlog-01/backlog.md

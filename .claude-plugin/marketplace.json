@@ -1,0 +1,16 @@
+{
+  "name": "supskill",
+  "description": "The supskill sprint conductor: drives one sprint from a markdown backlog through staged human gates, keeping all authoritative state on disk.",
+  "owner": {
+    "name": "Vagner Bessa",
+    "url": "https://github.com/bessavagner"
+  },
+  "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official", "pm-skills"],
+  "plugins": [
+    {
+      "name": "supskill",
+      "source": "./",
+      "description": "Sprint conductor: drives one sprint from a markdown backlog through staged human gates, keeping all authoritative state on disk"
+    }
+  ]
+}

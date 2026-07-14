@@ -2,5 +2,13 @@
   "name": "supskill",
   "version": "0.1.0",
   "description": "Sprint conductor: drives one sprint from a markdown backlog through staged human gates, keeping all authoritative state on disk",
-  "author": { "name": "Vagner Bessa" }
+  "author": { "name": "Vagner Bessa" },
+  "homepage": "https://github.com/bessavagner/supskill",
+  "repository": "https://github.com/bessavagner/supskill",
+  "license": "MIT",
+  "keywords": ["sprint", "conductor", "orchestration", "gates", "backlog"],
+  "dependencies": [
+    { "name": "superpowers", "marketplace": "claude-plugins-official" },
+    { "name": "pm-execution", "marketplace": "pm-skills" }
+  ]
 }
