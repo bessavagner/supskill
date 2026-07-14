@@ -114,6 +114,22 @@ def test_scope_boundary_block_records_one_blocker_and_parks_nothing(tmp_path):
     assert downstream.status is TaskStatus.PENDING  # untouched
 
 
+def test_a_wrong_recommendation_still_leaves_the_operator_the_right_option(tmp_path):
+    # S9a's recommendation was WRONG - option (c) was the correct one (D5). The record
+    # must survive validation with (c) intact and reachable, in state AND in the trail:
+    # a blocker whose wrong recommendation buries the right option has failed at exactly
+    # the moment it mattered.
+    _init_with_task(tmp_path)
+    record_blocker(S9A["task"], S9A["kind"], S9A["found"], S9A["options"], S9A["recommend"], root=tmp_path)
+
+    right_option = "(c) re-scope: the drift hypothesis may be wrong"
+    blocker = load_state(state_path(tmp_path)).blockers[0]
+    assert blocker.recommend.startswith("(a)")  # the recommendation the operator overruled
+    assert [option[:3] for option in blocker.options] == ["(a)", "(b)", "(c)"]
+    assert right_option in blocker.options
+    assert right_option in _blocker_lines(tmp_path)[0]["options"]
+
+
 def test_cli_block_with_repeated_option_flags(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _init_with_task(tmp_path)

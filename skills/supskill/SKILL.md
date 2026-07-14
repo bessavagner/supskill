@@ -430,6 +430,25 @@ deliverable.
 and halts with two blockers is a **successful** EXECUTE. Say so in those words.
 Do not apologize for it, and do not try once more.
 
+### The blocker rules
+
+The CLI already refuses a blocker with fewer than two options, an unlabelled
+option, a duplicate label, or a `--recommend` that names none of them. It cannot
+refuse three phrasings of the same option. That part is yours.
+
+- Options are **materially different courses of action** — do X / do Y / stop and
+  change the plan — each labelled `(a) …`, `(b) …`, `(c) …`.
+- **Never fabricate an option** to satisfy the two-option floor. If there is
+  genuinely only one move, there is no decision to escalate, and the task was not
+  blocked.
+- `--found` is what was **observed**, never what was inferred from it.
+- `--recommend` names one option and says why in the same breath.
+- The recommendation is **advice, not a decision**. You never act on your own
+  recommendation, at any point, for any reason — you halt (D4: escalation is
+  out-of-band, always). A wrong recommendation must still leave the operator the
+  right option: blinkebot's S9a blocker is on record as exactly that case — the
+  recommended option was wrong and option (c) was right.
+
 ## Reference
 
 - Why this skill is user-invoked only:

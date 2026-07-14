@@ -129,3 +129,14 @@ def test_the_drain_never_guesses():
     section = execute_section()
     assert "do not invent a blocker's options" in section
     assert "without the task review" in section
+
+
+def test_the_blocker_rules_forbid_a_fabricated_second_option():
+    section = execute_section()
+    assert "materially different courses of action" in section
+    assert "Never fabricate an option" in section
+    assert "what was **observed**" in section
+
+
+def test_the_conductor_never_acts_on_its_own_recommendation():
+    assert "advice, not a decision" in execute_section()
