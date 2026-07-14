@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
+    _add_cost(subparsers)
     return parser
 
 
@@ -189,6 +190,34 @@ def _cmd_plan_guard(args) -> int:
         print(plan_guard.refusal(args.before, args.after), file=sys.stderr)
         return 1
     print(f"plan-guard: HEAD unchanged ({args.before.strip()})")
+    return 0
+
+
+def _add_cost(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "cost", help="record one subagent dispatch's token usage against the running sprint"
+    )
+    sub.add_argument("--stage", required=True, help="SCOPE | REFINE | PLAN | EXECUTE | REVIEW")
+    sub.add_argument(
+        "--label",
+        help="which dispatch within the stage, e.g. implementer|task-reviewer|fix|reviewer-a",
+    )
+    sub.add_argument("--tokens", required=True, type=int, help="the dispatch's reported subagent_tokens")
+    sub.add_argument("--tool-uses", type=int, dest="tool_uses", help="the dispatch's reported tool_uses")
+    sub.add_argument("--duration-ms", type=int, dest="duration_ms", help="the dispatch's reported duration_ms")
+    sub.set_defaults(func=_cmd_cost)
+
+
+def _cmd_cost(args) -> int:
+    commands.record_cost(
+        args.stage,
+        args.tokens,
+        label=args.label,
+        tool_uses=args.tool_uses,
+        duration_ms=args.duration_ms,
+    )
+    where = f"{args.stage}/{args.label}" if args.label else args.stage
+    print(f"recorded cost: {where} tokens={args.tokens}")
     return 0
 
 

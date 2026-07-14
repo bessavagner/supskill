@@ -387,6 +387,53 @@ def record_task_status(
     return state
 
 
+def record_cost(
+    stage: str,
+    tokens: int,
+    *,
+    label: str | None = None,
+    tool_uses: int | None = None,
+    duration_ms: int | None = None,
+    root: Path | None = None,
+) -> None:
+    """Record one subagent dispatch's usage against the running sprint.
+
+    Pure telemetry: unlike every other verb, nothing here reads state.json in
+    order to mutate it - sprint.id is looked up only to place the trail file,
+    and no write to state.json follows. runs/<id>/costs.jsonl is the whole
+    effect, so supskill's own open cost questions (PAR's doubled review cost,
+    whether a SCOPE pass earns its keep) get answered from real numbers
+    instead of estimation.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    try:
+        stage_value = Stage(stage).value
+    except ValueError:
+        raise StateError(
+            f"unknown stage {stage!r}; expected one of {[s.value for s in Stage]}"
+        ) from None
+    if tokens < 0:
+        raise StateError("--tokens must not be negative")
+    if tool_uses is not None and tool_uses < 0:
+        raise StateError("--tool-uses must not be negative")
+    if duration_ms is not None and duration_ms < 0:
+        raise StateError("--duration-ms must not be negative")
+
+    state = store.load_state(store.state_path(root))
+    costs_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "costs.jsonl"
+    store.append_jsonl(
+        costs_file,
+        {
+            "stage": stage_value,
+            "label": label,
+            "tokens": tokens,
+            "tool_uses": tool_uses,
+            "duration_ms": duration_ms,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
 def advance_stage(to: str, root: Path | None = None) -> State:
     root = Path(root) if root is not None else Path.cwd()
     try:

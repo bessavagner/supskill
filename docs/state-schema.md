@@ -8,6 +8,7 @@ files (invariant 3). Layout:
       gates.jsonl             # every gate decision + the operator's verbatim response (append-only)
       runs/<normalized-id>/
         blockers.jsonl        # every blocker record raised during execution (append-only)
+        costs.jsonl           # every subagent dispatch's token/tool/duration usage (append-only)
         archive-<n>/          # a prior run's state.json + gates.jsonl, moved by `init --archive`
 
 ## Conventions
@@ -73,3 +74,16 @@ CLI ids map one-to-one onto state keys:
 operator's verbatim words (an **empty response is accepted and recorded** -
 the audit trail's job is to make a fabricated approval readable, F-4), and
 `at` is aware-UTC ISO-8601.
+
+## Costs
+
+`costs.jsonl` records `{stage, label, tokens, tool_uses, duration_ms, at}` per
+subagent dispatch, where `stage` is one of `SCOPE | REFINE | PLAN | EXECUTE |
+REVIEW`, `label` is a free-text name for the dispatch within that stage (e.g.
+`implementer`, `task-reviewer`, `fix`, `reviewer-a`) or `null` when the stage
+dispatches only one agent, `tokens` is that dispatch's reported
+`subagent_tokens`, `tool_uses` and `duration_ms` are its reported counterparts
+(nullable - not every caller has them), and `at` is aware-UTC ISO-8601. This
+verb never touches `state.json`: it is pure telemetry, recorded so questions
+like PAR's doubled review cost or whether a SCOPE pass earns its keep get
+answered from real numbers instead of estimation.

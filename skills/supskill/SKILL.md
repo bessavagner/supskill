@@ -30,6 +30,8 @@ everything from that file. Never rely on anything a previous conversation knew.
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
   and no template instructs an agent to run one or to write under `.supskill/`.
+- **Every subagent dispatch is costed.** Right after it completes, run
+  `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state cost --stage <stage> --tokens <subagent_tokens>` (add `--tool-uses`/`--duration-ms` when reported, `--label <name>` where a stage names one) — even if verification fails downstream.
 
 ## Arguments
 
@@ -123,7 +125,7 @@ from a template, verify its artifact mechanically, record it via
    `sprint-*.md` files in the backlog's directory (never the output path
    itself); if none exist, fill it with `none`.
 5. **Dispatch** one general-purpose subagent whose entire prompt is the filled
-   template.
+   template, then `cost --stage SCOPE`.
 6. **Verify mechanically.** The file must now exist at the derived output
    path. If it does not, report the agent's returned output verbatim and stop
    — no blocker verb is available before tasks exist, and the operator is one
@@ -145,15 +147,11 @@ prose for state, which is exactly the coupling the resume contract refuses.
    [references/refine-prompt.md](references/refine-prompt.md):
    `{SPRINT_DOC_PATH}`, `{BACKLOG_PATH}`, `{REPO_ROOT}` (the repo root the
    conductor runs from), `{EXEMPLAR_DOC}` (an existing refined sprint doc in
-   the backlog's directory, or `none`), `{AUDIT_FAILURES}` = `none`. Dispatch
-   one general-purpose subagent with the filled template.
+   the backlog's directory, or `none`), `{AUDIT_FAILURES}` = `none`. Dispatch one general-purpose subagent with the filled template, then `cost --stage REFINE --label refine`.
 3. **Audit mechanically.** From the repo root, run:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-audit --proofs <doc path>`
    - Exit 0 → continue at **Gate 1** (next section).
-   - Exit 1 → re-dispatch **once**: the same filled template with
-     `{AUDIT_FAILURES}` set to the audit's failure output, quoted verbatim.
-     Run the audit again. A second failure → report the failures verbatim and
-     stop. Never dispatch a third time — there is no retry loop.
+   - Exit 1 → re-dispatch **once**: the same filled template with `{AUDIT_FAILURES}` set to the audit's failure output, quoted verbatim, then `cost --stage REFINE --label refine-retry`. Run the audit again. A second failure → report the failures verbatim and stop. Never dispatch a third time — there is no retry loop.
 
 ## Gate 1 — the operator reads the refined doc
 
@@ -213,8 +211,8 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
 5. **Fill the template**
    [references/plan-prompt.md](references/plan-prompt.md) — `{SPRINT_DOC_PATH}`,
    `{OUTPUT_PATH}`, `{REPO_ROOT}`, `{EXEMPLAR_PLAN}` (an existing plan under
-   `docs/superpowers/plans/`, or `none`) — and dispatch one general-purpose
-   subagent whose entire prompt is the filled template.
+   `docs/superpowers/plans/`, or `none`) — dispatch one general-purpose
+   subagent whose entire prompt is the filled template, then `cost --stage PLAN`.
 6. **The HEAD guard.** Run `git rev-parse HEAD` again, then:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state plan-guard --before <before> --after <after>`
    - Exit 0 → continue.
@@ -384,7 +382,9 @@ The cycle:
 
 1. Record `BASE` (`git rev-parse HEAD`), write the brief, dispatch a fresh
    implementer, then the task reviewer, then a fix subagent on any Critical or
-   Important finding. That is SDD's cycle, unchanged.
+   Important finding. That is SDD's cycle, unchanged. Cost each dispatch as it
+   completes, `--label <N>-implementer` / `<N>-task-reviewer` / `<N>-fix`
+   (`<N>` = this heading's task number).
 2. Map what SDD reported onto the spine, **before the next dispatch begins** — a
    `/clear` or a crash mid-drain then costs at most one task's work:
 
