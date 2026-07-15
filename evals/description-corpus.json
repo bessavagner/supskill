@@ -1,0 +1,18 @@
+[
+  {"query": "start a new sprint from my backlog", "should_trigger": true, "category": "start-sprint"},
+  {"query": "run the next sprint in this repo", "should_trigger": true, "category": "start-sprint"},
+  {"query": "kick off sprint s3 from docs/plans/sprints/backlog-01/backlog.md", "should_trigger": true, "category": "start-sprint"},
+  {"query": "drive a sprint from my markdown backlog", "should_trigger": true, "category": "start-sprint"},
+  {"query": "resume the sprint I was running", "should_trigger": true, "category": "resume-sprint"},
+  {"query": "pick up my supskill sprint where it left off", "should_trigger": true, "category": "resume-sprint"},
+  {"query": "continue the in-progress sprint from its saved state", "should_trigger": true, "category": "resume-sprint"},
+  {"query": "what stage is the current sprint on?", "should_trigger": false, "category": "read-only-sprint-question"},
+  {"query": "summarize what happened in the last sprint", "should_trigger": false, "category": "read-only-sprint-question"},
+  {"query": "show me the sprint backlog file", "should_trigger": false, "category": "read-only-sprint-question"},
+  {"query": "create a sprint for the team in Jira", "should_trigger": false, "category": "other-repo-tooling"},
+  {"query": "plan a scrum sprint in Linear", "should_trigger": false, "category": "other-repo-tooling"},
+  {"query": "run our CI pipeline in GitHub Actions", "should_trigger": false, "category": "other-repo-tooling"},
+  {"query": "what does the word sprint mean in agile?", "should_trigger": false, "category": "names-sprint-not-run"},
+  {"query": "write a blog post about sprint planning", "should_trigger": false, "category": "names-sprint-not-run"},
+  {"query": "refactor the sprint burndown chart component", "should_trigger": false, "category": "names-sprint-not-run"}
+]
