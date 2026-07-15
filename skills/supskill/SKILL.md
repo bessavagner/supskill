@@ -94,10 +94,7 @@ Copy this checklist into your response and check items off as you go.
 | `REFINE` | Follow **The REFINE stage** below. |
 | `PLAN` | Follow **The PLAN stage** below. |
 | `EXECUTE` | Follow **The EXECUTE stage** below. |
-| `REVIEW` | Report: "REVIEW is not implemented yet — it lands with E6 (PAR + Gate 3)." Stop. |
-
-REVIEW is a stub until E6 lands — do not improvise it. An implemented stage
-follows its section below exactly.
+| `REVIEW` | Follow **The REVIEW stage** below. |
 
 ## The SCOPE stage
 
@@ -500,6 +497,9 @@ phrasings of the same option. That part is yours.
   right option: blinkebot's S9a blocker is on record as exactly that case — the
   recommended option was wrong and option (c) was right.
 
+## The REVIEW stage
+
+PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Dispatch discipline, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
 ## Reference
 
 - Why this skill is user-invoked only:
