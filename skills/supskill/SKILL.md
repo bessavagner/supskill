@@ -471,6 +471,10 @@ Ask for real, refuse an empty answer, record verbatim — the same shape as Gate
 
 No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it.
 
+## Propose the next sprint, then stop
+
+Once a replan shape or the refusal above has resolved the sprint, name the first unchecked epic in the backlog's build order, its points, and why (D6) - that is next sprint's SCOPE stage, not this run's. Then stop: no `advance`, `gate`, `task`, `block`, `cost`, `init`, or subagent dispatch follows the proposal, fork (Shape 3) and refusal alike.
+
 ## Reference
 
 - Why this skill is user-invoked only:

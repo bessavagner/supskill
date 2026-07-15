@@ -155,3 +155,26 @@ def test_the_refusal_subsection_matches_the_guard_functions_own_language():
     assert "state.json.backlog" in section
     assert "operator's alone" in section
     assert "author the new backlog by hand" in section
+
+
+def propose_section() -> str:
+    return _section("## Propose the next sprint, then stop", next_marker="\n## Reference")
+
+
+def test_propose_section_exists_and_names_the_backlog_build_order_rule():
+    section = propose_section()
+    assert "build order" in section
+    assert "D6" in section
+
+
+def test_propose_section_forbids_every_further_state_mutating_call():
+    section = propose_section()
+    for verb in ("`advance`", "`gate`", "`task`", "`block`", "`cost`", "`init`"):
+        assert verb in section, verb
+    assert "subagent dispatch" in section
+
+
+def test_propose_section_applies_regardless_of_which_shape_closed_the_sprint():
+    section = propose_section()
+    assert "fork" in section.lower() or "Shape 3" in section
+    assert "refus" in section.lower()
