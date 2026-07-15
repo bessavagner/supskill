@@ -58,7 +58,7 @@ TERMINAL_STATUSES: frozenset[TaskStatus] = frozenset(
 # CLI gate ids -> state.json gate keys, one-to-one (docs/state-schema.md, "Gates").
 GATE_KEYS: dict[str, str] = {"G1": "G1_sprint_doc", "G2": "G2_plan", "G3": "G3_review"}
 
-GATE_DECISIONS: tuple[str, str] = ("approved", "rejected")
+GATE_DECISIONS: tuple[str, str, str] = ("approved", "rejected", "replan")
 
 ARTIFACT_KEYS: tuple[str, str] = ("sprint_doc", "dev_plan")
 

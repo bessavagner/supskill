@@ -90,7 +90,7 @@ def _cmd_artifact(args) -> int:
 def _add_gate(subparsers) -> None:
     sub = subparsers.add_parser("gate", help="record a gate decision with the operator's verbatim words")
     sub.add_argument("--id", required=True, choices=["G1", "G2", "G3"], dest="gate_id")
-    sub.add_argument("--decision", required=True, choices=["approved", "rejected"])
+    sub.add_argument("--decision", required=True, choices=["approved", "rejected", "replan"])
     sub.add_argument("--response", required=True, help="the operator's verbatim response (may be empty)")
     sub.set_defaults(func=_cmd_gate)
 

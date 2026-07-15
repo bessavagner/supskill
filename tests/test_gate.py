@@ -95,3 +95,18 @@ def test_cli_gate(tmp_path, monkeypatch, capsys):
     assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
     assert main(["gate", "--id", "G1", "--decision", "approved", "--response", "approved, go"]) == 0
     assert load_state(state_path(tmp_path)).gates["G1_sprint_doc"] == "approved"
+
+
+def test_replan_is_a_legal_g3_decision_deliberately_deferred_since_s1(tmp_path):
+    # sprint-01-state-spine.md:104: "G3's four replan shapes are E6's to add" - this pays that IOU
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    record_gate("G3", "replan", "shape 2: SK-041 parks at a live boundary", root=tmp_path)
+    assert load_state(state_path(tmp_path)).gates["G3_review"] == "replan"
+    assert _gate_lines(tmp_path)[0]["decision"] == "replan"
+
+
+def test_cli_gate_accepts_replan(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
+    assert main(["gate", "--id", "G3", "--decision", "replan", "--response", "shape 1: writeback"]) == 0
+    assert load_state(state_path(tmp_path)).gates["G3_review"] == "replan"
