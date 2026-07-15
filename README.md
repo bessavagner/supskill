@@ -13,9 +13,9 @@
 
 ## The finding this is built on
 
-> **A delegated agent cannot ask you anything. In headless mode it does not fail — it silently receives an *empty answer* in about 37 milliseconds and proceeds as if you had spoken.**
+> **A delegated agent cannot ask you anything. In a subagent or a headless session, `AskUserQuestion` is not available, so at the layer where the work actually happens there is no channel to escalate a decision to you.**
 
-`AskUserQuestion` is stripped from subagents. Every autonomous-coding framework that promises to "escalate to the human when it gets stuck" is, at the layer where the work actually happens, promising something the runtime cannot deliver. The agent doesn't stall and doesn't crash. It invents an answer and keeps going, confidently, for the rest of the sprint.
+When I first built supskill, the runtime failed this claim silently: [claude-code issue #50728](https://github.com/anthropics/claude-code/issues/50728) (Python Agent SDK, closed not planned) reported a headless `AskUserQuestion` call receiving an empty answer in about 37 milliseconds, the agent proceeding as if you had spoken. That 37ms figure is the issue's report, not my measurement. Re-checking on Claude Code 2.1.210, that exact behavior did not reproduce on the paths I tested: `AskUserQuestion` is absent from a headless session's tool manifest and unavailable inside a subagent, and calling it now returns a loud error rather than a silent empty answer. The load-bearing problem survives the change. Every autonomous-coding framework that promises to "escalate to the human when it gets stuck" is, at the layer where the work actually happens, promising something the runtime still cannot deliver: a delegated agent has no channel to escalate a decision, so nothing forces it to stop and ask rather than guess with the tools it has. (I re-tested the CLI and subagent paths, not the Python Agent SDK #50728 was filed against.)
 
 You cannot fix that by making the agent smarter. You fix it by **removing the situation in which guessing is the only move left.**
 
@@ -172,7 +172,7 @@ That dogfooding produced the project's most interesting result. **Five sprints; 
 
 - The PLAN stage could have **executed the entire sprint before its own approval gate**, because the planning skill's handoff names a required execution sub-skill per branch — and a headless agent would have taken it, while `state.json` still read `PLAN`.
 - The state spine could start a task and block a task, but had **no verb that could finish one** — so no sprint could ever have reached REVIEW. Every task in a fully successful sprint would have stayed `PENDING` forever.
-- A gate could have **silently self-approved** in headless mode: the empty answer from finding zero, meeting a `gate` verb that accepted empty responses by design.
+- A gate could have **silently self-approved** in headless mode: a delegated agent has no channel to escalate the decision a gate requires, so a `gate` verb that accepted an empty or defaulted response would have logged that missing answer as approval.
 
 Each of these was a sprint-ending defect. Each was found by reading the live source at pull time, not by planning harder. That is the entire thesis of the refine-at-pull-time stage, and the project has now argued it five times against its own code.
 
