@@ -8,6 +8,7 @@ plugin root, never inside .claude-plugin/ (contexts/02 SS3).
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -142,3 +143,22 @@ def test_marketplace_lists_this_plugin():
     assert marketplace["owner"]["name"]
     names = [plugin["name"] for plugin in marketplace["plugins"]]
     assert json.loads(MANIFEST.read_text(encoding="utf-8"))["name"] in names
+
+
+def test_plugin_version_matches_pyproject_so_the_release_tag_is_consistent():
+    # SK-060: the v0.1.0 tag is cut from pyproject's version (release hygiene,
+    # DoR finding 4 - NOT what install resolves against). Keep the manifest's
+    # own version equal to it so the tag never names a version they disagree on.
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert manifest["version"] == pyproject["project"]["version"]
+
+
+def test_skill_creator_is_not_a_runtime_dependency():
+    # SK-061, DoR finding 6: skill-creator is an author/eval-time tool composed
+    # by evals/README.md's loop - the conductor never dispatches it. It must stay
+    # out of both the dispatched-skill set and the declared runtime dependencies,
+    # or the declaration guard above would demand a manifest entry for a tool no
+    # stage dispatches and pull a third cross-marketplace dep into the install.
+    assert "skill-creator" not in DISPATCHED_SKILL_PLUGINS
+    assert "skill-creator" not in _declared_dependencies()
