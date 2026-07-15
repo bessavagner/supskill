@@ -10,8 +10,9 @@ REFERENCES = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "r
 SCOPE = REFERENCES / "scope-prompt.md"
 REFINE = REFERENCES / "refine-prompt.md"
 PLAN = REFERENCES / "plan-prompt.md"
+REVIEW = REFERENCES / "review-prompt.md"
 
-TEMPLATES = (SCOPE, REFINE, PLAN)
+TEMPLATES = (SCOPE, REFINE, PLAN, REVIEW)
 EXECUTION_SUB_SKILLS = ("subagent-driven-development", "executing-plans")
 
 
@@ -92,3 +93,27 @@ def test_refine_template_states_the_two_constraints_and_the_field_list():
     # the spec-shaped definition appears as a concrete field list, not as the word "spec-shaped"
     assert "DoR findings (refined at pull time)" in text
     assert "in place" in text
+
+
+def test_review_template_names_its_placeholders():
+    text = REVIEW.read_text(encoding="utf-8")
+    for placeholder in ("{REVIEWER_LABEL}", "{REVIEW_PACKAGE_PATH}", "{REPO_ROOT}"):
+        assert placeholder in text, placeholder
+
+
+def test_review_template_states_the_two_standing_constraints():
+    text = REVIEW.read_text(encoding="utf-8")
+    assert "cannot ask anyone anything" in text  # D4 / invariant 2
+    assert "must not run `supskill-state`" in text  # invariant 3, fourth surface
+
+
+def test_review_template_states_the_competitive_frame_and_no_cross_visibility():
+    text = REVIEW.read_text(encoding="utf-8")
+    assert "false positives are worse than misses" in text  # D9's own framing
+    assert "no other agent's" in text.lower()  # no cross-visibility between the two dispatches
+
+
+def test_review_template_asks_for_severity_and_a_defensible_location():
+    text = REVIEW.read_text(encoding="utf-8")
+    assert "Critical" in text and "Important" in text and "Minor" in text
+    assert "location" in text.lower()
