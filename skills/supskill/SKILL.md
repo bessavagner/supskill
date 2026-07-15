@@ -152,26 +152,10 @@ prose for state, which is exactly the coupling the resume contract refuses.
 
 ## Gate 1 — the operator reads the refined doc
 
-The CLI records empty gate responses BY DESIGN — a fabricated approval must
-leave a readable empty quote in the trail. So the refusal to treat silence as
-consent lives here, in the conductor, and nowhere else.
+Ask for real, refuse an empty answer, record verbatim: [references/gate.md](references/gate.md).
 
-1. **Ask for real.** Use the `AskUserQuestion` tool: approve / reject the
-   refined sprint doc at its recorded path, free text welcome. Name the doc
-   path in the question so the operator knows what they are approving.
-2. **An empty or auto-resolved answer is not a decision.** In headless runs
-   the question tool resolves instantly with an empty answer. If the answer
-   comes back empty, do NOT call `gate`. Report that Gate 1 requires an
-   interactive operator, and stop.
-3. **Record verbatim.** A non-empty answer — the selected label plus any free
-   text, unedited — goes to:
-   `gate --id G1 --decision <approved|rejected> --response "<verbatim>"`
 4. `approved` → `advance --to PLAN` → continue at **The PLAN stage** (below).
-5. `rejected` → the decision is recorded and final for this pass; report it
-   and stop, naming the rework loop: the operator edits the doc directly or
-   asks for a fresh REFINE pass, then re-invokes `/supskill run <sprint-id>`
-   and re-gates. The last decision wins in state while every attempt stays in
-   the trail.
+5. `rejected` → recorded and final for this pass; report it and stop, naming the rework loop: edit the doc or ask for a fresh REFINE pass, then re-invoke and re-gate. Last decision wins in state; every attempt stays in the trail.
 
 ## The PLAN stage
 
@@ -237,35 +221,10 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
 
 ## Gate 2 — the operator reads the dev plan
 
-The same shape as Gate 1, deliberately. The CLI records empty gate responses BY
-DESIGN — a fabricated approval must leave a readable empty quote in the trail.
-So the refusal to treat silence as consent lives here, in the conductor, and
-nowhere else.
+Ask for real, refuse an empty answer, record verbatim - the same shape as Gate 1: [references/gate.md](references/gate.md).
 
-1. **Ask for real.** Use the `AskUserQuestion` tool: approve / reject the dev
-   plan at its recorded path, free text welcome. Name the plan path in the
-   question so the operator knows what they are approving.
-2. **An empty or auto-resolved answer is not a decision.** In headless runs the
-   question tool resolves instantly with an empty answer. If the answer comes
-   back empty, do NOT call `gate`. Report that Gate 2 requires an interactive
-   operator, and stop.
-3. **Record verbatim.** A non-empty answer — the selected label plus any free
-   text, unedited — goes to:
-   `gate --id G2 --decision <approved|rejected> --response "<verbatim>"`
-4. `approved` → `advance --to EXECUTE` → continue at **The EXECUTE stage**
-   (below). That transition also re-checks that `tasks[]` is non-empty; a
-   refusal there is reported verbatim and stops the run.
-5. `rejected` → the decision is recorded and final for this pass; report it and
-   stop, naming the rework loop: PLAN's resume idempotence means re-invoking
-   `/supskill run <sprint-id>` with the rejected plan still recorded and still
-   on disk skips the dispatch and re-gates on the same file. So the operator
-   edits the recorded plan **at its path** directly, then re-invokes — the
-   conductor re-reads the edited file from disk and re-gates it. To force a
-   genuinely fresh PLAN run instead, the operator removes the recorded plan
-   file first, so the "recorded AND the file exists" condition fails and PLAN
-   dispatches again — that is the operator's call to make, never the
-   conductor's: the conductor never deletes an artifact. The last decision
-   wins in state while every attempt stays in the trail.
+4. `approved` → `advance --to EXECUTE` → continue at **The EXECUTE stage** (below). That transition also re-checks that `tasks[]` is non-empty; a refusal there is reported verbatim and stops the run.
+5. `rejected` → recorded and final for this pass; report it and stop. PLAN's resume idempotence means re-invoking with the rejected plan still on disk skips the dispatch and re-gates the same file, so the operator edits the recorded plan **at its path** directly, then re-invokes. To force a fresh PLAN run, the operator removes the recorded plan file first - the conductor never deletes an artifact itself.
 
 ## The EXECUTE stage
 
@@ -500,6 +459,14 @@ phrasings of the same option. That part is yours.
 ## The REVIEW stage
 
 PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Dispatch discipline, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
+## Gate 3 — one decision, not two
+
+Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every open blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped.
+
+4. Closes cleanly → `gate --id G3 --decision approved --response "<verbatim>"`. `REVIEW` is the last stage; nothing advances past it.
+5. Resolves into Shape 1, 2 or 3 → `gate --id G3 --decision replan --response "<verbatim>"`, then run the shape's own verb: [references/replan-shapes.md](references/replan-shapes.md).
+6. Reads as Shape 4 → **no** `gate` call — see **Refusing a north-star supersede**, next.
+
 ## Reference
 
 - Why this skill is user-invoked only:

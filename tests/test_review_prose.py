@@ -62,3 +62,50 @@ def test_review_notes_state_the_aggregation_rule_and_the_verbs_exact_flags():
     assert "Critical > Important > Minor" in text
     assert "--reviewer" in text and "--severity" in text and "--confidence" in text
     assert "--finding" in text and "--location" in text
+
+
+def gate3_section() -> str:
+    return _section("## Gate 3")
+
+
+def test_gate_1_and_gate_2_still_route_correctly_after_the_extraction():
+    # the exact substrings tests/test_execute_prose.py already asserts must survive
+    text = SKILL.read_text(encoding="utf-8")
+    assert "`approved` → `advance --to PLAN` → continue at **The PLAN stage**" in text
+    assert "`approved` → `advance --to EXECUTE` → continue at **The EXECUTE stage**" in text
+
+
+def test_all_three_gates_point_at_the_shared_gate_doc():
+    text = SKILL.read_text(encoding="utf-8")
+    assert text.count("references/gate.md") >= 3  # Gate 1, Gate 2, Gate 3
+
+
+def test_gate_md_states_the_three_shared_steps():
+    text = (REFERENCES / "gate.md").read_text(encoding="utf-8")
+    assert "Ask for real" in text
+    assert "empty" in text.lower() and "not a decision" in text.lower()
+    assert "Record verbatim" in text
+    assert "gate --id <G1|G2|G3> --decision" in text or "gate --id" in text
+
+
+def test_gate_3_batches_every_source_the_sprint_produced():
+    section = gate3_section()
+    assert "blocker" in section.lower()
+    assert "parked" in section.lower()
+    assert "DONE_WITH_CONCERNS" in section
+    assert "review.jsonl" in section
+    assert "confidence=high" in section and "confidence=actionable" in section
+
+
+def test_gate_3_decision_routing_is_exact_for_all_three_outcomes():
+    section = gate3_section()
+    assert '`gate --id G3 --decision approved --response "<verbatim>"`' in section
+    assert '`gate --id G3 --decision replan --response' in section
+    assert "replan-shapes.md" in section
+    assert "Refusing a north-star supersede" in section
+
+
+def test_gate_3_never_records_a_decision_for_a_shape_4_reading():
+    # SK-052's own accept criteria: Shape 4 is never a `gate` call at all
+    section = gate3_section()
+    assert "**no** `gate` call" in section
