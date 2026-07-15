@@ -467,6 +467,10 @@ Ask for real, refuse an empty answer, record verbatim — the same shape as Gate
 5. Resolves into Shape 1, 2 or 3 → `gate --id G3 --decision replan --response "<verbatim>"`, then run the shape's own verb: [references/replan-shapes.md](references/replan-shapes.md).
 6. Reads as Shape 4 → **no** `gate` call — see **Refusing a north-star supersede**, next.
 
+### Refusing a north-star supersede
+
+No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it.
+
 ## Reference
 
 - Why this skill is user-invoked only:

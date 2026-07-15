@@ -142,3 +142,16 @@ def test_shape_4_points_at_the_refusal_and_adds_no_mutator():
     text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
     assert "Refusing a north-star supersede" in text
     assert "never a new mutator" in text.lower() or "no new mutator" in text.lower()
+
+
+def test_gate_3_section_wires_in_the_refusal_subsection_right_after_it():
+    section = gate3_section()
+    assert "### Refusing a north-star supersede" in section
+
+
+def test_the_refusal_subsection_matches_the_guard_functions_own_language():
+    section = gate3_section()
+    assert "backlog.md" in section and "North star" in section
+    assert "state.json.backlog" in section
+    assert "operator's alone" in section
+    assert "author the new backlog by hand" in section
