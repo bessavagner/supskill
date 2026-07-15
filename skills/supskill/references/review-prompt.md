@@ -25,7 +25,7 @@ Two facts about your situation, stated up front because they are structural:
   question tool is unavailable to you, and in a headless run it would resolve
   instantly with an empty answer. Do not ask; report what you found instead.
 - **You must not run `supskill-state`, and you must not read or write anything
-  under `.superskill/`.** You produce a finding list; the conductor alone
+  under `.supskill/`.** You produce a finding list; the conductor alone
   records it, after both reviewers have returned.
 
 **The frame: false positives are worse than misses.** Report only what you
