@@ -109,3 +109,36 @@ def test_gate_3_never_records_a_decision_for_a_shape_4_reading():
     # SK-052's own accept criteria: Shape 4 is never a `gate` call at all
     section = gate3_section()
     assert "**no** `gate` call" in section
+
+
+def test_replan_shapes_doc_names_all_four_and_marks_the_fourth_out_of_scope():
+    text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
+    for shape in ("generative writeback", "park at a live boundary", "fork on live evidence",
+                  "north-star reset"):
+        assert shape in text.lower()
+    assert "out of scope" in text.lower()
+
+
+def test_shape_1_matches_the_existing_backlog_row_format_and_only_appends():
+    text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
+    assert "| ID | Story | Pts | Pri | Status |" in text
+    assert "Only append" in text or "only append" in text.lower()
+
+
+def test_shape_2_uses_the_task_status_verb_that_already_exists():
+    text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
+    assert '`task --id <SK-0xx> --status PARKED --note' in text
+    assert "not** advanced past" in text.lower() or "not advanced past" in text.lower()
+
+
+def test_shape_3_names_the_fork_verb_and_never_runs_a_branch_rename():
+    text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
+    assert "`init`" in text
+    assert "Name the rename" in text or "name the rename" in text.lower()
+    assert "do not" in text.lower() and "run it" in text.lower()
+
+
+def test_shape_4_points_at_the_refusal_and_adds_no_mutator():
+    text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
+    assert "Refusing a north-star supersede" in text
+    assert "never a new mutator" in text.lower() or "no new mutator" in text.lower()
