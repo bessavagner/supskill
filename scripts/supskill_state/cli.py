@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
     _add_cost(subparsers)
+    _add_review(subparsers)
     return parser
 
 
@@ -218,6 +219,24 @@ def _cmd_cost(args) -> int:
     )
     where = f"{args.stage}/{args.label}" if args.label else args.stage
     print(f"recorded cost: {where} tokens={args.tokens}")
+    return 0
+
+
+def _add_review(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "review", help="record one aggregated PAR finding to runs/<id>/review.jsonl"
+    )
+    sub.add_argument("--reviewer", required=True, help="reviewer-a | reviewer-b | both")
+    sub.add_argument("--severity", required=True, help="Critical | Important | Minor")
+    sub.add_argument("--confidence", required=True, help="high | actionable")
+    sub.add_argument("--finding", required=True, help="what was found, in your own words")
+    sub.add_argument("--location", required=True, help="file:line or path")
+    sub.set_defaults(func=_cmd_review)
+
+
+def _cmd_review(args) -> int:
+    commands.record_review_finding(args.reviewer, args.severity, args.confidence, args.finding, args.location)
+    print(f"recorded review finding: {args.reviewer} {args.severity}/{args.confidence}")
     return 0
 
 

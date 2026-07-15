@@ -32,6 +32,7 @@ from .model import (
 )
 from .plan_coverage import validate_plan_coverage
 from .proofs import parse_proof_lines
+from .review import parse_confidence, parse_reviewer, parse_severity
 from .scratch import derive_scratch, normalize_sprint_id
 from .transitions import failed_preconditions, next_stage
 
@@ -429,6 +430,44 @@ def record_cost(
             "tokens": tokens,
             "tool_uses": tool_uses,
             "duration_ms": duration_ms,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
+def record_review_finding(
+    reviewer: str,
+    severity: str,
+    confidence: str,
+    finding: str,
+    location: str,
+    root: Path | None = None,
+) -> None:
+    """Record one aggregated PAR finding (SK-050).
+
+    Pure trail, like costs.jsonl: this reads state.json only to place the
+    trail file by sprint.id, and writes nothing back to it - review has no
+    state.json field, the same shape as cost. Gate 3 (SK-051) reads
+    runs/<id>/review.jsonl directly; nothing re-parses prose.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    parsed_reviewer = parse_reviewer(reviewer, "review --reviewer")
+    parsed_severity = parse_severity(severity, "review --severity")
+    parsed_confidence = parse_confidence(confidence, "review --confidence")
+    for flag, value in (("--finding", finding), ("--location", location)):
+        if not (value or "").strip():
+            raise StateError(f"a review finding requires a non-empty {flag}")
+
+    state = store.load_state(store.state_path(root))
+    review_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "review.jsonl"
+    store.append_jsonl(
+        review_file,
+        {
+            "reviewer": parsed_reviewer,
+            "severity": parsed_severity,
+            "confidence": parsed_confidence,
+            "finding": finding,
+            "location": location,
             "at": store.now_utc_iso(),
         },
     )
