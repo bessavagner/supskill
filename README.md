@@ -107,7 +107,7 @@ $ uv run pytest -q
 ........................................................................ [ 57%]
 ........................................................................ [ 86%]
 ...................................                                      [100%]
-251 passed in 0.60s
+314 passed in 0.58s
 ```
 
 No LLM calls. No network. No subagents. No flake. The suite proves the gates cannot be skipped, and it runs faster than you can read this sentence.
@@ -122,7 +122,7 @@ Requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
 git clone https://github.com/bessavagner/supskill.git
 cd supskill
 uv sync
-uv run pytest -q          # 251 passing, offline, <1s
+uv run pytest -q          # 314 passing, offline, <1s
 ```
 
 Install as a Claude Code plugin:
