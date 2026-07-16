@@ -143,6 +143,8 @@ too, not just at E6.
 | SK-052 | The four replan shapes, incl. **generative writeback** — a review may append new `pending` rows to `backlog.md`. This is how blinkebot's S9 became S9a. | 8 | M | ☑ |
 | SK-053 | **Refuse** to perform a north-star supersede autonomously. Operator-only, full stop. (Invariant 7) | 2 | M | ☑ |
 | SK-054 | Propose the next sprint; stop. Do not roll on. (**D6**) | 2 | M | ☑ |
+| SK-055 | Wire `review.py`'s `aggregate()`/`worse_severity()` into `record_review_finding` as an actual validation check, so a `--reviewer both --confidence actionable` or `--reviewer reviewer-a --confidence high` contradiction is refused at the recording boundary instead of accepted verbatim. (New at S6's own REVIEW/PAR dogfood, both reviewers independently, Important/high-confidence: `aggregate()`/`worse_severity()` have zero production callers today — PAR's "fixed rule, no negotiation" is enforced only by conductor prose, not by the function that implements it.) | 3 | S | ☐ |
+| SK-056 | Give `replan_guard.py`'s `is_supersede()`/`refusal()` an actual runtime call site at Gate 3 (or fold their logic into the conductor prose path that already enforces invariant 7, and delete the dead module if a real call site isn't warranted). (New at S6's own REVIEW/PAR dogfood, both reviewers independently, Important/high-confidence: the module presents as Gate 3's north-star-supersede guard but is reached only by its own test file — `cli.py:191`'s only `refusal()` call is the older, unrelated `plan_guard.refusal`.) | 3 | S | ☐ |
 
 ## E7 — Packaging & distribution (9 pts)
 
