@@ -161,7 +161,7 @@ Alpha, and honest about it. Built in public, one sprint at a time — **by itsel
 | **E4** | PLAN + Gate 2 | ✅ shipped |
 | **E5** | EXECUTE — drain-then-halt | ✅ shipped |
 | **E6** | REVIEW (PAR) + Gate 3 + replan | ⬜ backlog |
-| **E7** | Packaging & distribution | ⬜ backlog |
+| **E7** | Packaging & distribution | ✅ shipped |
 | **E8** | Validation — *drive a real sprint or don't ship* | ⬜ backlog |
 
 ## What the evidence actually says

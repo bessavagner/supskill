@@ -148,9 +148,9 @@ too, not just at E6.
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
-| SK-060 | `marketplace.json` + first publish. **The plugin slug is immutable** — decide the name before this ships. | 3 | S | ☐ |
-| SK-061 | `skill-creator` eval loop: should-trigger / should-not-trigger hit rate on the description. | 3 | S | ☐ |
-| SK-062 | README + the build-in-public writeup for `bessavagner-page`. The lede is the finding, not the plugin: *"delegated agents cannot ask you anything — and in headless they silently receive an empty answer."* | 3 | C | ☐ |
+| SK-060 | `marketplace.json` + first publish. **The plugin slug is immutable** — decide the name before this ships. | 3 | S | ☑ |
+| SK-061 | `skill-creator` eval loop: should-trigger / should-not-trigger hit rate on the description. | 3 | S | ☑ |
+| SK-062 | README + the build-in-public writeup for `bessavagner-page`. The lede is the finding, not the plugin: *"delegated agents cannot ask you anything — and in headless they silently receive an empty answer."* | 3 | C | ☑ |
 
 ## E8 — Validation (10 pts)
 
@@ -230,3 +230,14 @@ ever needed to build (SK-050), and a CLI value S1 itself flagged as deliberately
 deferred (SK-051). Six sprints, six data points, same direction — §7.2's answer
 holds a sixth time: *the gate earns its keep because the refinement does,
 whether or not the code under review yet exists.* (Report §7.2)
+
+**Data point #7 (S7 DoR, 2026-07-15):** for the first time in this backlog,
+refinement against live source grew scope by **0 pts**. E7's stories are mostly
+not-Python and mostly not-offline-provable, so the sharpest things the pass
+found were not missing plumbing to build but claims the live world contradicts:
+a repo already public, an "offline" eval whose named mechanism (`skill-creator`)
+runs live, and a `v0.1.0` tag that resolves nothing at install. Correcting a
+claim is not adding scope — the honest delta is 0 points and six corrections.
+The gate still earned its keep: the corrections kept the plan from re-doing done
+work, mislabelling a live spend as offline, or gating install on a tag. (Report
+§7.2 — the refinement earns the gate whether it grows points or only fixes them.)
