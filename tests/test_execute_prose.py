@@ -112,10 +112,11 @@ def test_provable_gates_the_claim_and_not_the_run():
     assert "every task runs" in section
 
 
-def test_the_halt_happens_exactly_once_and_advances_nothing():
+def test_the_halt_happens_exactly_once_and_advances_to_review_only():
     section = execute_section()
     assert "**exactly once**" in section
-    assert "Do not advance to REVIEW" in section
+    assert "run `advance --to REVIEW`" in section
+    assert "Do not continue into **The REVIEW stage** in this same run" in section
     assert "A halt is the target shape, not an error" in section
 
 

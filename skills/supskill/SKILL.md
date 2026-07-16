@@ -425,13 +425,17 @@ status and would be skipped by that test (S5's own plan ends with two). Then,
 - **any stale `.superpowers/sdd/progress.md`** found on disk: named once, so the
   operator can delete it.
 
-The final whole-branch review is **E6's**, and EXECUTE dispatches nothing after the
-last task. Your job is to leave `<scratch>/review-final.diff` and the `--note`
-roll-ups **on disk** for E6's REVIEW/PAR stage to read — that is where the roll-up
-is spent, and that is why it is not a silent discard.
+The final whole-branch review is **REVIEW's**, and EXECUTE dispatches nothing after
+the last task. Your job is to leave `<scratch>/review-final.diff` and the `--note`
+roll-ups **on disk** for REVIEW/PAR to read — that is where the roll-up is spent,
+and that is why it is not a silent discard.
 
-Then stop. Do not advance to REVIEW, do not open a gate, and do not ask a question —
-Gate 3 is E6's, and until E6 lands the halt report *is* this stage's deliverable.
+Then run `advance --to REVIEW` (the CLI itself refuses while any task is
+non-terminal, so this is safe even after a halt that leaves blockers behind) and
+stop. Do not continue into **The REVIEW stage** in this same run, do not open a
+gate, and do not ask a question — REVIEW's own dispatch, with its real-token
+reviewers, is the next `/supskill run` invocation's job, and the halt report above
+is still this stage's deliverable.
 
 **A halt is the target shape, not an error.** A sprint that drains 4 of 6 tasks
 and halts with two blockers is a **successful** EXECUTE. Say so in those words.
