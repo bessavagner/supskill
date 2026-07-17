@@ -21,11 +21,14 @@ import re
 PROCESS_MARKER = "(process)"
 
 _TASK_HEADING = re.compile(r"^ {0,3}###\s+Task\s+\d+\b.*$")
-_STORY_ID = re.compile(r"SK-\d+")
 # A CommonMark fence line: 0-3 leading spaces, then a run of 3+ of the same
 # fence character (backtick or tilde), then the rest of the line (info string
 # on an opener, or the trailing-whitespace check on a closer).
 _FENCE_LINE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+
+
+def _story_id_pattern(story_prefix: str) -> re.Pattern[str]:
+    return re.compile(rf"{re.escape(story_prefix)}-\d+")
 
 
 def plan_task_headings(text: str) -> list[str]:
@@ -72,17 +75,18 @@ def plan_task_headings(text: str) -> list[str]:
     return headings
 
 
-def validate_plan_coverage(plan_text: str, story_ids: list[str]) -> list[str]:
+def validate_plan_coverage(plan_text: str, story_ids: list[str], story_prefix: str = "SK") -> list[str]:
     """One message per violation; an empty list means the join is clean both ways."""
     headings = plan_task_headings(plan_text)
     if not headings:
         return ["the plan has no `### Task N: ...` headings - there is nothing to join the stories through"]
 
+    story_id_re = _story_id_pattern(story_prefix)
     known = set(story_ids)
     named: set[str] = set()
     failures: list[str] = []
     for heading in headings:
-        found = _STORY_ID.findall(heading)
+        found = story_id_re.findall(heading)
         if not found:
             if PROCESS_MARKER not in heading:
                 failures.append(f"plan task names no story and is not marked {PROCESS_MARKER}: {heading}")

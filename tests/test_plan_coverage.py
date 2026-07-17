@@ -187,3 +187,21 @@ def test_a_heading_indented_four_or_more_spaces_is_an_indented_code_block_not_a_
     assert plan_task_headings(plan) == ["### Task 1: the verb (SK-030)"]
     failures = validate_plan_coverage(plan, STORIES)
     assert len(failures) == 1 and "SK-031" in failures[0] and "drops" in failures[0]
+
+
+def test_custom_story_prefix_is_honored():
+    plan = """### Task 1: the verb (BLK-030)
+
+### Task 2: the guard (BLK-031)
+
+### Task 3: the demo checklist (process)
+"""
+    assert validate_plan_coverage(plan, ["BLK-030", "BLK-031"], story_prefix="BLK") == []
+
+
+def test_a_heading_naming_the_default_sk_prefix_does_not_satisfy_a_configured_blk_prefix():
+    failures = validate_plan_coverage("### Task 1: x (SK-030)\n", ["SK-030"], story_prefix="BLK")
+    # the heading names no BLK- story (unmarked, non-process) AND SK-030 is reported dropped
+    assert len(failures) == 2
+    assert any("not marked" in f for f in failures)
+    assert any("SK-030" in f and "drops" in f for f in failures)
