@@ -85,3 +85,29 @@ def test_proofs_flag_also_validates_the_grammar(tmp_path, monkeypatch, capsys):
     assert "vibes" in capsys.readouterr().err
     doc.write_text("## Stories\n\n### SK-001 — s · 1 · M\n- **proof:** seam=unit · impact=local · provable=offline\n")
     assert main(["doc.md", "--proofs"]) == 0
+
+
+def test_proofs_flag_honors_the_projects_configured_story_id_prefix(tmp_path, monkeypatch, capsys):
+    from supskill_state.config import write_story_id_prefix
+
+    _tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    write_story_id_prefix("BLK", root=tmp_path)
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "## Stories\n\n### BLK-103 — s · 1 · M\n"
+        "- **proof:** seam=unit · impact=local · provable=offline\n"
+    )
+    assert main(["doc.md", "--proofs"]) == 0
+
+
+def test_proofs_flag_without_config_still_gates_on_the_default_sk_prefix(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "## Stories\n\n### BLK-103 — s · 1 · M\n"
+        "- **proof:** seam=unit · impact=local · provable=offline\n"
+    )
+    assert main(["doc.md", "--proofs"]) == 1
+    assert "before any" in capsys.readouterr().err

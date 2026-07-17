@@ -23,6 +23,7 @@ import re
 import sys
 from pathlib import Path
 
+from . import config
 from .errors import StateError
 from .proofs import parse_proof_lines
 
@@ -100,7 +101,8 @@ def main(argv: list[str] | None = None) -> int:
     failures = audit_citations(text, Path.cwd())
     if args.proofs:
         try:
-            parse_proof_lines(text)
+            story_prefix = config.load_story_id_prefix(Path.cwd())
+            parse_proof_lines(text, story_prefix=story_prefix)
         except StateError as error:
             failures.append(str(error))
     if failures:
