@@ -57,3 +57,14 @@ def test_both_runbooks_point_at_the_shared_report_template():
     blinkebot = (VALIDATION / "blinkebot-run.md").read_text(encoding="utf-8")
     assert "report-template.md" in fixture
     assert "report-template.md" in blinkebot
+
+
+def test_the_validation_readme_lists_both_stories_and_their_runbooks():
+    text = (VALIDATION / "README.md").read_text(encoding="utf-8")
+    assert "SK-070" in text and "fixture-run.md" in text
+    assert "SK-071" in text and "blinkebot-run.md" in text
+
+
+def test_the_validation_readme_states_the_backlog_flip_is_not_automatic():
+    text = (VALIDATION / "README.md").read_text(encoding="utf-8")
+    assert "no task in this plan does it for you" in text.lower() or "by hand" in text.lower()
