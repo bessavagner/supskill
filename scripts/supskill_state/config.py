@@ -31,8 +31,17 @@ def load_story_id_prefix(root: Path | None = None) -> str:
     path = config_path(root)
     if not path.is_file():
         return DEFAULT_STORY_ID_PREFIX
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return data.get("story_id_prefix", DEFAULT_STORY_ID_PREFIX)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise StateError(f"{path} is not valid JSON: {error}") from error
+    prefix = data.get("story_id_prefix", DEFAULT_STORY_ID_PREFIX)
+    if not isinstance(prefix, str):
+        raise StateError(
+            f"{path} has a non-string story_id_prefix ({prefix!r}); "
+            "expected a string"
+        )
+    return prefix
 
 
 def write_story_id_prefix(prefix: str, root: Path | None = None) -> None:

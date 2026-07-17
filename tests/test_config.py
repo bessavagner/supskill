@@ -73,3 +73,29 @@ def test_commands_set_story_id_prefix_returns_the_previous_value(tmp_path):
     assert set_story_id_prefix("BLK", root=tmp_path) == "SK"
     assert set_story_id_prefix("PROJ", root=tmp_path) == "BLK"
     assert load_story_id_prefix(tmp_path) == "PROJ"
+
+
+def test_load_raises_state_error_on_malformed_json(tmp_path):
+    path = config_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(StateError, match="config.json"):
+        load_story_id_prefix(tmp_path)
+
+
+def test_load_raises_state_error_on_non_string_story_id_prefix(tmp_path):
+    path = config_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"story_id_prefix": 123}), encoding="utf-8")
+    with pytest.raises(StateError, match="story_id_prefix"):
+        load_story_id_prefix(tmp_path)
+
+
+def test_commands_set_story_id_prefix_raises_state_error_on_corrupted_config(tmp_path):
+    from supskill_state.commands import set_story_id_prefix
+
+    path = config_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(StateError, match="config.json"):
+        set_story_id_prefix("BLK", root=tmp_path)
