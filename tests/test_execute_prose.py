@@ -64,17 +64,51 @@ def test_the_execute_section_prepares_the_scratch_before_the_first_dispatch():
 def test_the_execute_section_records_base_and_never_derives_it():
     section = execute_section()
     assert "Never `HEAD~1`" in section
-    assert "git merge-base" in section  # the final whole-branch review gets its own package
+    assert "merge-base" in section  # the final whole-branch review gets its own package
 
 
 def test_the_execute_section_names_a_model_on_every_dispatch():
     assert "Every dispatch names its model explicitly" in execute_section()
 
 
-def test_the_execute_section_stops_before_dispatching_on_the_default_branch():
+def test_the_execute_section_auto_isolates_into_a_worktree_instead_of_stopping():
     section = execute_section()
     assert "git rev-parse --abbrev-ref HEAD" in section
-    assert "git switch -c" in section
+    assert "dispatch root" in section
+    assert "worktree-notes.md" in section
+    assert "EXECUTE writes commits and will not write them to" not in section
+    assert "git switch -c" not in section
+
+
+def test_worktree_notes_exist_and_name_the_script_and_its_refusal():
+    text = (SKILL_DIR / "references" / "worktree-notes.md").read_text(encoding="utf-8")
+    assert "supskill-state worktree --branch" in text
+    assert ".worktrees/" in text
+    assert "StateError" in text
+
+
+def test_worktree_notes_state_the_dispatch_root_rule_and_the_frozen_state_json():
+    text = (SKILL_DIR / "references" / "worktree-notes.md").read_text(encoding="utf-8")
+    assert "Work from:" in text
+    assert "git -C <dispatch-root>" in text
+    assert "original repo root" in text
+
+
+def test_worktree_notes_state_the_halt_handoff_never_auto_merges():
+    text = (SKILL_DIR / "references" / "worktree-notes.md").read_text(encoding="utf-8")
+    assert "never auto-merges" in text.lower()
+
+
+def test_the_dispatch_discipline_names_the_dispatch_root_for_base_and_review_package():
+    section = execute_section()
+    assert "git -C <dispatch-root> rev-parse HEAD" in section
+    assert "git -C <dispatch-root> merge-base <default-branch> HEAD" in section
+
+
+def test_the_halt_names_the_worktree_when_one_was_used():
+    section = execute_section()
+    assert "worktree-notes.md" in section
+    assert "if it was a worktree" in section.lower()
 
 
 def test_supskill_contributes_no_fourth_prompt_template():

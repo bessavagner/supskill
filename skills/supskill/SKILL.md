@@ -261,23 +261,24 @@ exactly the D1 violation this stage exists to avoid.
    too, take whichever of `origin/main` / `origin/master`
    `git rev-parse --verify --quiet` resolves, and if neither or both resolve, that is a
    **blocker**: the ladder never ends in a `main` guess. Then run
-   `git rev-parse --abbrev-ref HEAD`. If that is the default branch, **stop before
-   dispatching anything**: report that EXECUTE writes commits and will not write them to
-   the default branch, and name `git switch -c <branch>` as the operator's move. If it
-   returns the literal `HEAD`, you are on a **detached HEAD**: stop exactly the same way,
-   and name the same move. Do not create, switch, or delete a branch yourself — the same
-   restraint that keeps `--archive` out of your hands.
-2. **Prepare the scratch.** Run SDD's `sdd-workspace` script once — it creates
-   `.superpowers/sdd/` and writes the self-ignoring `.gitignore` that keeps every
-   sprint's scratch out of `git status`. Then `mkdir -p <scratch>`, where
-   `<scratch>` is `sprint.scratch` from `show --json`. **Neither is optional.**
-   `task-brief` writes its `OUTFILE` with a plain shell redirect and never
-   creates the parent, so the first brief dies on a missing directory; and
-   passing `OUTFILE` is exactly what skips `sdd-workspace`'s own call, so a
-   target repo that does not already ignore `.superpowers/` will let an
+   `git rev-parse --abbrev-ref HEAD`. Not the default branch, and not the literal `HEAD`
+   (detached) → the **dispatch root** is the repo root; go to check 2. Otherwise → do not
+   stop: isolate into a worktree and set the dispatch root to its path, per
+   [references/worktree-notes.md](references/worktree-notes.md). Do not create, switch,
+   or delete a branch yourself outside of that one script call — the same restraint that
+   keeps `--archive` out of your hands.
+2. **Prepare the scratch.** From the dispatch root, run SDD's `sdd-workspace` script
+   once — it creates `.superpowers/sdd/` and writes the self-ignoring `.gitignore`
+   that keeps every sprint's scratch out of `git status`. Then `mkdir -p <scratch>`,
+   also at the dispatch root, where `<scratch>` is `sprint.scratch` from `show --json`.
+   **Neither is optional.** `task-brief` writes its `OUTFILE` with a plain shell
+   redirect and never creates the parent, so the first brief dies on a missing
+   directory; and passing `OUTFILE` is exactly what skips `sdd-workspace`'s own call,
+   so a target repo that does not already ignore `.superpowers/` will let an
    implementer's `git add -A` commit this sprint's briefs and diffs.
-3. **Read the plan.** `artifacts.dev_plan` from `show --json` is the plan, and
-   the only authority for it. Missing from disk → report that and stop.
+3. **Read the plan.** `artifacts.dev_plan` from `show --json` is the plan, and the
+   only authority for it — read it from the dispatch root (its synced copy, when a
+   worktree is in use). Missing from disk → report that and stop.
 4. **SDD's pre-flight plan review.** Scan the plan once for conflicts, as SDD
    requires. SDD batches them into one question to a human; you have none. Every
    conflict becomes a blocker on the task it affects — with real options, per the
@@ -288,19 +289,25 @@ exactly the D1 violation this stage exists to avoid.
 ### The dispatch discipline — every task, no exceptions
 
 - **Every scratch path is passed explicitly, and derived, never typed**
-  (invariant 4). `<scratch>` is `sprint.scratch` from `show --json`:
-  - brief: `task-brief <dev_plan> <N> <scratch>/task-<N>-brief.md`
+  (invariant 4), all of it relative to the dispatch root established in the branch
+  check. `<scratch>` is `sprint.scratch` from `show --json`:
+  - brief: `task-brief <dev_plan> <N> <scratch>/task-<N>-brief.md`, `<dev_plan>` read
+    from the dispatch root's synced copy
   - report: `<scratch>/task-<N>-report.md` — named after the brief, per SDD's
     File Handoffs rule, so re-reading a task's outcome is one `Read`, never a
     re-dispatch
   - review package: `review-package <BASE> HEAD <scratch>/review-<N>.diff`
+  - every implementer dispatch's `Work from:` line names the dispatch root, never an
+    assumed repo root
 - **`BASE` is recorded, never derived.** Before each implementer dispatch, run
-  `git rev-parse HEAD` and keep that SHA as the task's `BASE`. **Never `HEAD~1`** — SDD
-  says in as many words that it silently drops all but the last commit of a multi-commit
-  task. EXECUTE also **produces** the final whole-branch review's package — an output it
-  leaves for E6, never an input it consumes (see **The halt**):
-  `review-package $(git merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`,
-  with `<default-branch>` derived exactly as in the branch check.
+  `git -C <dispatch-root> rev-parse HEAD` and keep that SHA as the task's `BASE`.
+  **Never `HEAD~1`** — SDD says in as many words that it silently drops all but the
+  last commit of a multi-commit task. EXECUTE also **produces** the final
+  whole-branch review's package — an output it leaves for E6, never an input it
+  consumes (see **The halt**):
+  `review-package $(git -C <dispatch-root> merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`,
+  run from `<dispatch-root>`, with `<default-branch>` derived exactly as in the
+  branch check.
 - **Every dispatch names its model explicitly.** An omitted model silently
   inherits this session's — usually the most capable and most expensive one.
   *Which* model per role is SDD's Model Selection section's call, not this
@@ -423,7 +430,10 @@ status and would be skipped by that test (S5's own plan ends with two). Then,
 - **every parked task:** with the blocker that parked it;
 - **every `DONE_WITH_CONCERNS` concern:** verbatim;
 - **any stale `.superpowers/sdd/progress.md`** found on disk: named once, so the
-  operator can delete it.
+  operator can delete it;
+- **the dispatch root, if it was a worktree:** its path and branch, named explicitly
+  — the operator's merge/PR/keep/discard/cleanup call, exactly like any other branch
+  ([references/worktree-notes.md](references/worktree-notes.md)).
 
 The final whole-branch review is **REVIEW's**, and EXECUTE dispatches nothing after
 the last task. Your job is to leave `<scratch>/review-final.diff` and the `--note`
