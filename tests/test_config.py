@@ -65,3 +65,11 @@ def test_overwriting_the_prefix_updates_in_place(tmp_path):
     write_story_id_prefix("BLK", root=tmp_path)
     write_story_id_prefix("PROJ", root=tmp_path)
     assert load_story_id_prefix(tmp_path) == "PROJ"
+
+
+def test_commands_set_story_id_prefix_returns_the_previous_value(tmp_path):
+    from supskill_state.commands import set_story_id_prefix
+
+    assert set_story_id_prefix("BLK", root=tmp_path) == "SK"
+    assert set_story_id_prefix("PROJ", root=tmp_path) == "BLK"
+    assert load_story_id_prefix(tmp_path) == "PROJ"

@@ -141,3 +141,26 @@ def test_cli_tasks_with_plan_refuses_and_lists_every_violation(tmp_path, monkeyp
     assert main(["tasks", "--from", doc, "--plan", "plan.md"]) == 1
     err = capsys.readouterr().err
     assert "SK-001" in err and "SK-002" in err and "(process)" in err
+
+
+def test_load_tasks_honors_the_projects_configured_story_id_prefix(tmp_path):
+    from supskill_state.config import write_story_id_prefix
+
+    init_sprint("s4", backlog="backlog.md", root=tmp_path)
+    write_story_id_prefix("BLK", root=tmp_path)
+    doc = "## Stories\n\n### BLK-103 — first · 3 · M\n- **proof:** seam=unit · impact=local · provable=offline\n"
+    (tmp_path / "doc.md").write_text(doc, encoding="utf-8")
+    state = load_tasks("doc.md", root=tmp_path)
+    assert [t.id for t in state.tasks] == ["BLK-103"]
+
+
+def test_load_tasks_with_plan_honors_the_configured_prefix(tmp_path):
+    from supskill_state.config import write_story_id_prefix
+
+    init_sprint("s4", backlog="backlog.md", root=tmp_path)
+    write_story_id_prefix("BLK", root=tmp_path)
+    doc = "## Stories\n\n### BLK-103 — first · 3 · M\n- **proof:** seam=unit · impact=local · provable=offline\n"
+    (tmp_path / "doc.md").write_text(doc, encoding="utf-8")
+    (tmp_path / "plan.md").write_text("### Task 1: a (BLK-103)\n", encoding="utf-8")
+    state = load_tasks("doc.md", plan="plan.md", root=tmp_path)
+    assert [t.id for t in state.tasks] == ["BLK-103"]

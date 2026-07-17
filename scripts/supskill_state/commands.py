@@ -14,7 +14,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from . import store
+from . import config, store
 from .errors import StateError
 from .model import (
     ARTIFACT_KEYS,
@@ -294,7 +294,8 @@ def load_tasks(
     doc_path = root / doc
     if not doc_path.is_file():
         raise StateError(f"no such doc: {doc}")
-    proofs = parse_proof_lines(doc_path.read_text(encoding="utf-8"))
+    story_prefix = config.load_story_id_prefix(root)
+    proofs = parse_proof_lines(doc_path.read_text(encoding="utf-8"), story_prefix=story_prefix)
     if not proofs:
         raise StateError(
             f"no proof lines in {doc}: there is nothing to load "
@@ -314,7 +315,9 @@ def load_tasks(
         if not plan_path.is_file():
             raise StateError(f"no such plan: {plan}")
         failures = validate_plan_coverage(
-            plan_path.read_text(encoding="utf-8"), [proof.story for proof in proofs]
+            plan_path.read_text(encoding="utf-8"),
+            [proof.story for proof in proofs],
+            story_prefix=story_prefix,
         )
         if failures:
             raise StateError(
@@ -327,6 +330,18 @@ def load_tasks(
     ]
     store.dump_state(state, store.state_path(root))
     return state
+
+
+def set_story_id_prefix(prefix: str, *, root: Path | None = None) -> str:
+    """Persist the project's story-id prefix to .supskill/config.json (SK-064).
+
+    Returns the prefix that was configured before this call (DEFAULT_STORY_ID_PREFIX
+    if none was set), so the CLI can report what changed.
+    """
+    root = Path(root) if root is not None else Path.cwd()
+    previous = config.load_story_id_prefix(root)
+    config.write_story_id_prefix(prefix, root=root)
+    return previous
 
 
 def record_task_status(
