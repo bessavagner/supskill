@@ -39,8 +39,9 @@ run it.
 ## Shape 4 — north-star reset
 
 Out of scope by construction: no verb reachable from any shape above
-supersedes `backlog.md` wholesale. See `SKILL.md`'s "Refusing a north-star
-supersede".
+supersedes `backlog.md` wholesale. `replan-guard --shape north-star-reset`
+confirms this reading and prints the refusal verbatim, read-only like
+`plan-guard`. See `SKILL.md`'s "Refusing a north-star supersede".
 
 ---
 

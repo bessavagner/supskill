@@ -483,7 +483,7 @@ Ask for real, refuse an empty answer, record verbatim — the same shape as Gate
 
 ### Refusing a north-star supersede
 
-No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it.
+No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). Confirm your own classification against [references/replan-shapes.md](references/replan-shapes.md) with `replan-guard --shape <generative-writeback|park-at-boundary|fork-on-live-evidence|north-star-reset>`: on the first three shapes it exits 0 and you continue as that shape's row describes; on `north-star-reset` it exits 1 and prints the refusal verbatim on stderr - relay that text to the operator. A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it.
 
 ## Propose the next sprint, then stop
 

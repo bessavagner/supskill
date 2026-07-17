@@ -157,6 +157,11 @@ def test_the_refusal_subsection_matches_the_guard_functions_own_language():
     assert "author the new backlog by hand" in section
 
 
+def test_the_refusal_subsection_names_the_replan_guard_command():
+    section = gate3_section()
+    assert "replan-guard --shape" in section
+
+
 def propose_section() -> str:
     return _section("## Propose the next sprint, then stop", next_marker="\n## Reference")
 
