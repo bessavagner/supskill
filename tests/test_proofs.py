@@ -79,3 +79,32 @@ def test_grammar_line_constant_is_the_documented_grammar():
         " · impact=none|local|cross-surface|journey"
         " · provable=offline|operator"
     )
+
+
+def test_custom_story_prefix_is_honored():
+    doc = """## Stories
+
+### BLK-103 — a story · 3 · M
+- **proof:** seam=unit · impact=local · provable=offline
+"""
+    assert parse_proof_lines(doc, story_prefix="BLK") == [
+        ProofLine("BLK-103", "unit", "local", "offline")
+    ]
+
+
+def test_a_heading_that_does_not_match_the_configured_prefix_is_not_a_story_heading():
+    # SK-001 does not match story_prefix="BLK" - the proof line below it has no heading
+    doc = """## Stories
+
+### SK-001 — a story · 3 · M
+- **proof:** seam=unit · impact=local · provable=offline
+"""
+    with pytest.raises(StateError, match="before any"):
+        parse_proof_lines(doc, story_prefix="BLK")
+
+
+def test_the_missing_heading_violation_names_the_configured_prefix():
+    with pytest.raises(StateError, match=r"before any ### BLK-xxx heading"):
+        parse_proof_lines(
+            "- **proof:** seam=unit · impact=local · provable=offline\n", story_prefix="BLK"
+        )

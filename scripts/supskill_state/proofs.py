@@ -35,8 +35,11 @@ GRAMMAR_LINE = (
 
 # anchored at column 0: the grammar exemplar inside indented code blocks must not parse
 _PROOF = re.compile(r"^- \*\*proof:\*\* seam=(\S+) · impact=(\S+) · provable=(\S+)(?:\s.*)?$")
-_STORY = re.compile(r"^###\s+.*?(SK-\d+)")
 _SECTION = re.compile(r"^##\s+(?!#)(.+?)\s*$")
+
+
+def _story_pattern(story_prefix: str) -> re.Pattern[str]:
+    return re.compile(rf"^###\s+.*?({re.escape(story_prefix)}-\d+)")
 
 
 @dataclass(frozen=True)
@@ -47,21 +50,22 @@ class ProofLine:
     provable: str
 
 
-def parse_proof_lines(text: str) -> list[ProofLine]:
+def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
     """Every proof line, in document order; raises StateError listing every violation."""
+    story_re = _story_pattern(story_prefix)
     proofs: list[ProofLine] = []
     violations: list[str] = []
     seen: set[str] = set()
     story: str | None = None
     in_stories = False
-    required: list[str] = []  # SK headings inside the Stories section, in order
+    required: list[str] = []  # story headings inside the Stories section, in order
 
     for number, line in enumerate(text.splitlines(), start=1):
         section = _SECTION.match(line)
         if section:
             in_stories = section.group(1).strip().lower() == "stories"
             continue
-        heading = _STORY.match(line)
+        heading = story_re.match(line)
         if heading:
             story = heading.group(1)
             if in_stories:
@@ -71,7 +75,7 @@ def parse_proof_lines(text: str) -> list[ProofLine]:
         if not match:
             continue
         if story is None:
-            violations.append(f"line {number}: proof line before any ### SK-xxx heading")
+            violations.append(f"line {number}: proof line before any ### {story_prefix}-xxx heading")
             continue
         seam, impact, provable = match.groups()
         for token, allowed, field in (
