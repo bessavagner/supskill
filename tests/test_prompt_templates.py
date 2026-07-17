@@ -117,3 +117,15 @@ def test_review_template_asks_for_severity_and_a_defensible_location():
     text = REVIEW.read_text(encoding="utf-8")
     assert "Critical" in text and "Important" in text and "Minor" in text
     assert "location" in text.lower()
+
+
+def test_refine_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():
+    text = REFINE.read_text(encoding="utf-8")
+    assert "supskill's own tooling or mechanism" in text
+    assert "reproduced symptom" in text
+
+
+def test_plan_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():
+    text = PLAN.read_text(encoding="utf-8")
+    assert "supskill's own tooling or mechanism" in text
+    assert "reproduced symptom" in text

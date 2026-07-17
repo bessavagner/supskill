@@ -39,6 +39,14 @@ Duties, in order:
    `path:line` (or `path:start-end`) citation that resolves in {REPO_ROOT}'s
    working tree. A script audits every citation and fails this stage on any
    that does not resolve.
+
+   A finding about supskill's own tooling or mechanism — not {REPO_ROOT}'s
+   code — is not evidenced by a citation into the plugin's installed source
+   tree; it doesn't live under {REPO_ROOT} and no such citation can resolve.
+   Evidence for a tooling finding is the reproduced symptom itself: quote the
+   exact command and its verbatim output in prose, with no backtick
+   `path:line` token, so the citation audit has nothing to (mis)resolve.
+
 2. Grow the doc until it carries ALL of the following (this list is the
    contract, item by item):
    - a **Context** paragraph per story, grounded in `file:line` citations;

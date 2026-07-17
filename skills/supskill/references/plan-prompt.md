@@ -56,6 +56,14 @@ Your task:
    `Create: \`scripts/foo.py\`` — because a line number for a file that does not
    exist yet cannot resolve and never will. Read the live source before citing
    it; the sprint doc was written earlier and its line numbers may have shifted.
+
+   A finding about supskill's own tooling or mechanism — not {REPO_ROOT}'s
+   code — is not evidenced by a citation into the plugin's installed source
+   tree; it doesn't live under {REPO_ROOT} and no such citation can resolve.
+   Evidence for a tooling finding is the reproduced symptom itself: quote the
+   exact command and its verbatim output in prose, with no backtick
+   `path:line` token, so the citation audit has nothing to (mis)resolve.
+
 4. Shape target: {EXEMPLAR_PLAN}. Honor the sprint doc's own sequencing section
    if it has one — it was written by someone who knew what blocks what.
 
