@@ -39,3 +39,21 @@ def test_the_blinkebot_runbook_warns_the_s11_label_is_historical():
 def test_the_blinkebot_runbook_forbids_init_over_a_live_run():
     text = (VALIDATION / "blinkebot-run.md").read_text(encoding="utf-8")
     assert "do **not** `init` over it" in text
+
+
+def test_the_report_template_exists_and_names_every_required_section():
+    text = (VALIDATION / "report-template.md").read_text(encoding="utf-8")
+    for heading in ("## Run identity", "## Gate decisions", "## Cost", "## Findings", "## Verdict"):
+        assert heading in text
+
+
+def test_the_report_template_points_at_the_designs_own_validation_bar():
+    text = (VALIDATION / "report-template.md").read_text(encoding="utf-8")
+    assert "docs/.ai/reports/2026-07-12-supskill-design-decisions.md:345" in text
+
+
+def test_both_runbooks_point_at_the_shared_report_template():
+    fixture = (VALIDATION / "fixture-run.md").read_text(encoding="utf-8")
+    blinkebot = (VALIDATION / "blinkebot-run.md").read_text(encoding="utf-8")
+    assert "report-template.md" in fixture
+    assert "report-template.md" in blinkebot
