@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_plan_guard(subparsers)
     _add_cost(subparsers)
     _add_review(subparsers)
+    _add_config(subparsers)
     return parser
 
 
@@ -237,6 +238,23 @@ def _add_review(subparsers) -> None:
 def _cmd_review(args) -> int:
     commands.record_review_finding(args.reviewer, args.severity, args.confidence, args.finding, args.location)
     print(f"recorded review finding: {args.reviewer} {args.severity}/{args.confidence}")
+    return 0
+
+
+def _add_config(subparsers) -> None:
+    sub = subparsers.add_parser("config", help="set project-level config, e.g. the story-id prefix")
+    sub.add_argument(
+        "--story-id-prefix",
+        required=True,
+        dest="story_id_prefix",
+        help="uppercase prefix used by this project's story ids, e.g. BLK for BLK-103 (default: SK)",
+    )
+    sub.set_defaults(func=_cmd_config)
+
+
+def _cmd_config(args) -> int:
+    previous = commands.set_story_id_prefix(args.story_id_prefix)
+    print(f"set story id prefix: {args.story_id_prefix} (was: {previous})")
     return 0
 
 

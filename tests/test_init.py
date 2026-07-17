@@ -2,6 +2,7 @@
 
 import pytest
 
+from supskill_state.cli import main
 from supskill_state.commands import init_sprint
 from supskill_state.errors import StateError
 from supskill_state.model import Stage
@@ -124,3 +125,17 @@ def test_cli_init_scope_without_backlog_refuses(tmp_path, monkeypatch, capsys):
     assert main(["init", "s1"]) == 1
     assert "--backlog" in capsys.readouterr().err
     assert not supskill_dir(tmp_path).exists()
+
+
+def test_cli_config_sets_the_story_id_prefix_and_reports_the_previous_value(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["config", "--story-id-prefix", "BLK"]) == 0
+    assert "set story id prefix: BLK (was: SK)" in capsys.readouterr().out
+    assert main(["config", "--story-id-prefix", "PROJ"]) == 0
+    assert "set story id prefix: PROJ (was: BLK)" in capsys.readouterr().out
+
+
+def test_cli_config_rejects_an_invalid_prefix(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["config", "--story-id-prefix", "blk"]) == 1
+    assert "story-id-prefix" in capsys.readouterr().err
