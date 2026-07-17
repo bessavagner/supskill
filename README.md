@@ -86,7 +86,7 @@ Two pieces, deliberately.
 **`supskill-state`** — a pure-Python CLI, zero runtime dependencies. It is the only thing on earth permitted to write `state.json`, and every transition validates its preconditions before it will move:
 
 ```
-init · show · artifact · gate · block · task · tasks · advance · plan-guard · cost
+init · show · artifact · gate · block · task · tasks · advance · plan-guard · worktree · cost
 ```
 
 `advance --to PLAN` refuses without an approved Gate 1. `advance --to EXECUTE` refuses without an approved Gate 2, and refuses an empty task list. `advance --to REVIEW` refuses while any task is non-terminal. `block` refuses a blocker carrying fewer than two options, or a recommendation that doesn't name one of them — because a blocker without real options is a shrug, not a decision. `task` is the only verb that can finish one (`DONE` / `DONE_WITH_CONCERNS` / `PARKED`). `cost` is pure telemetry — it records a subagent dispatch's token/tool/duration usage and never touches `state.json` — so the open question of whether a given stage earns its keep in tokens gets answered from real numbers instead of guesswork.

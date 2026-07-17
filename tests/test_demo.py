@@ -55,11 +55,13 @@ def test_no_module_outside_store_opens_files_for_writing():
     # primitives; every other module goes through store.dump_state/append_jsonl.
     # The authoritative check is the reviewer reading every write site - this
     # test guards the obvious regression.
+    # Exception: worktree.py writes .gitignore for git configuration (SK-092),
+    # not application state.
     package_dir = Path(supskill_state.__file__).parent
     write_call = re.compile(r"""open\([^)]*["'][wax]|\.write_text\(|\.write_bytes\(""")
     offenders = [
         source.name
         for source in package_dir.glob("*.py")
-        if source.name != "store.py" and write_call.search(source.read_text(encoding="utf-8"))
+        if source.name not in ("store.py", "worktree.py") and write_call.search(source.read_text(encoding="utf-8"))
     ]
     assert offenders == []

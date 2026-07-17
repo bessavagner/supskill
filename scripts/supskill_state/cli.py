@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from . import commands, plan_guard
+from . import commands, plan_guard, worktree
 from .errors import StateError
 
 
@@ -27,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
+    _add_worktree(subparsers)
     _add_cost(subparsers)
     _add_review(subparsers)
     _add_config(subparsers)
@@ -192,6 +194,29 @@ def _cmd_plan_guard(args) -> int:
         print(plan_guard.refusal(args.before, args.after), file=sys.stderr)
         return 1
     print(f"plan-guard: HEAD unchanged ({args.before.strip()})")
+    return 0
+
+
+def _add_worktree(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "worktree",
+        help="isolate EXECUTE into .worktrees/<branch>, syncing artifacts into it",
+    )
+    sub.add_argument("--branch", required=True, help="branch name for the worktree")
+    sub.add_argument(
+        "--artifact",
+        action="append",
+        default=[],
+        dest="artifacts",
+        help="a file to copy from the repo root into the worktree; repeat the flag",
+    )
+    sub.set_defaults(func=_cmd_worktree)
+
+
+def _cmd_worktree(args) -> int:
+    path, created = worktree.ensure_worktree(Path.cwd(), args.branch, args.artifacts)
+    status = "created" if created else "reused"
+    print(f"worktree ready at {path} ({status})")
     return 0
 
 
