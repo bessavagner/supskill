@@ -78,6 +78,41 @@ def test_the_vocabulary_and_the_two_required_fields_are_refused_with_nothing_wri
     assert _reviews(tmp_path) == []
 
 
+@pytest.mark.parametrize(
+    "overrides,match",
+    [
+        ({"reviewer": "both", "confidence": "actionable"}, "requires --confidence high"),
+        ({"reviewer": "reviewer-a", "confidence": "high"}, "requires --confidence actionable"),
+        ({"reviewer": "reviewer-b", "confidence": "high"}, "requires --confidence actionable"),
+    ],
+)
+def test_a_confidence_that_contradicts_the_fixed_aggregation_rule_is_refused_with_nothing_written(
+    tmp_path, overrides, match
+):
+    init_sprint("s6", backlog="backlog.md", root=tmp_path)
+    call = {
+        "reviewer": "reviewer-a", "severity": "Critical", "confidence": "actionable",
+        "finding": "a finding", "location": "src/x.py:1",
+    }
+    call.update(overrides)
+    with pytest.raises(StateError, match=match):
+        record_review_finding(
+            call["reviewer"], call["severity"], call["confidence"], call["finding"], call["location"],
+            root=tmp_path,
+        )
+    assert _reviews(tmp_path) == []
+
+
+def test_cli_refuses_a_both_reviewer_finding_recorded_as_only_actionable(tmp_path, monkeypatch, capsys):
+    init_sprint("s6", backlog="backlog.md", root=tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main([
+        "review", "--reviewer", "both", "--severity", "Important", "--confidence", "actionable",
+        "--finding", "x", "--location", "y",
+    ]) == 1
+    assert "requires --confidence high" in capsys.readouterr().err
+
+
 def test_both_is_a_legal_reviewer_value_for_a_finding_matched_across_both(tmp_path):
     init_sprint("s6", backlog="backlog.md", root=tmp_path)
     record_review_finding("both", "Important", "high", "matched by both reviewers", "src/y.py:9", root=tmp_path)

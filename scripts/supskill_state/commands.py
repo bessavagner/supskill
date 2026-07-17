@@ -32,7 +32,7 @@ from .model import (
 )
 from .plan_coverage import validate_plan_coverage
 from .proofs import parse_proof_lines
-from .review import parse_confidence, parse_reviewer, parse_severity
+from .review import aggregate, parse_confidence, parse_reviewer, parse_severity
 from .scratch import derive_scratch, normalize_sprint_id
 from .transitions import failed_preconditions, next_stage
 
@@ -464,6 +464,12 @@ def record_review_finding(
     trail file by sprint.id, and writes nothing back to it - review has no
     state.json field, the same shape as cost. Gate 3 (SK-051) reads
     runs/<id>/review.jsonl directly; nothing re-parses prose.
+
+    SK-055: the recorded --confidence is cross-checked against PAR's fixed
+    aggregation rule (review.aggregate) before anything is written - a
+    finding reported by both reviewers can only be high confidence, and a
+    finding reported by one reviewer can only be actionable. The rule has no
+    negotiation, so a mismatched --confidence is refused, not accepted.
     """
     root = Path(root) if root is not None else Path.cwd()
     parsed_reviewer = parse_reviewer(reviewer, "review --reviewer")
@@ -472,6 +478,16 @@ def record_review_finding(
     for flag, value in (("--finding", finding), ("--location", location)):
         if not (value or "").strip():
             raise StateError(f"a review finding requires a non-empty {flag}")
+
+    severity_a = parsed_severity if parsed_reviewer in ("reviewer-a", "both") else None
+    severity_b = parsed_severity if parsed_reviewer in ("reviewer-b", "both") else None
+    expected_confidence, _ = aggregate(severity_a, severity_b)
+    if parsed_confidence != expected_confidence:
+        raise StateError(
+            f"--reviewer {parsed_reviewer} --severity {parsed_severity} requires "
+            f"--confidence {expected_confidence} (PAR's fixed aggregation rule, no negotiation); "
+            f"got --confidence {parsed_confidence}"
+        )
 
     state = store.load_state(store.state_path(root))
     review_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "review.jsonl"
