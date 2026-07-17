@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, plan_guard, worktree
+from . import commands, plan_guard, replan_guard, worktree
 from .errors import StateError
 
 
@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
+    _add_replan_guard(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
     _add_review(subparsers)
@@ -194,6 +195,28 @@ def _cmd_plan_guard(args) -> int:
         print(plan_guard.refusal(args.before, args.after), file=sys.stderr)
         return 1
     print(f"plan-guard: HEAD unchanged ({args.before.strip()})")
+    return 0
+
+
+def _add_replan_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "replan-guard",
+        help="does this Gate 3 replan shape read as a north-star supersede? exit 1 means refuse",
+    )
+    sub.add_argument(
+        "--shape",
+        required=True,
+        choices=list(replan_guard.REPLAN_SHAPES),
+        help="the conductor's own classification of the operator's Gate 3 answer",
+    )
+    sub.set_defaults(func=_cmd_replan_guard)
+
+
+def _cmd_replan_guard(args) -> int:
+    if replan_guard.is_supersede(args.shape):
+        print(replan_guard.refusal(args.shape), file=sys.stderr)
+        return 1
+    print(f"replan-guard: {args.shape} is an amending shape, not a supersede")
     return 0
 
 

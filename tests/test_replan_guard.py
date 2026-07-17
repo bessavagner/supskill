@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from supskill_state import commands
+from supskill_state.cli import main
 from supskill_state.errors import StateError
 from supskill_state.replan_guard import (
     AMENDING_SHAPES,
@@ -84,3 +85,21 @@ def test_every_trail_file_this_module_writes_is_jsonl_never_markdown():
     )
     assert len(names) >= 4  # blockers, tasks, costs, review - grows, never shrinks silently
     assert all(name.endswith(".jsonl") for name in names)
+
+
+# --- the CLI call site: SK-056 ---
+
+def test_cli_exit_codes_for_replan_guard(capsys):
+    assert main(["replan-guard", "--shape", "generative-writeback"]) == 0
+    assert "is an amending shape" in capsys.readouterr().out
+
+    assert main(["replan-guard", "--shape", "north-star-reset"]) == 1
+    err = capsys.readouterr().err
+    assert "operator's alone" in err
+    assert "author the new backlog by hand" in err
+
+
+def test_replan_guard_needs_no_state_file(tmp_path, monkeypatch):
+    # it is a query, not a verb: it must work before init and after a wipe, like plan-guard
+    monkeypatch.chdir(tmp_path)
+    assert main(["replan-guard", "--shape", "park-at-boundary"]) == 0
