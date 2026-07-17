@@ -70,6 +70,19 @@ def append_jsonl(path: Path, record: dict) -> None:
         os.fsync(handle.fileno())
 
 
+def write_json_config(path: Path, data: dict) -> None:
+    """Write a JSON configuration file (e.g., .supskill/config.json).
+
+    Unlike dump_state, config files are not part of the sprint resume mechanism,
+    so we write directly without temp-file atomicity.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(data, indent=2) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()  # noqa: UP017
 
