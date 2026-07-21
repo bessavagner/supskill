@@ -1,6 +1,6 @@
 {
   "name": "supskill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sprint conductor: drives one sprint from a markdown backlog through staged human gates, keeping all authoritative state on disk",
   "author": { "name": "Vagner Bessa" },
   "homepage": "https://github.com/bessavagner/supskill",
