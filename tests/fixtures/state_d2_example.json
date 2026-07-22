@@ -8,7 +8,7 @@
     "branch": "feat/e10-alerting-spine",
     "scratch": ".superpowers/sdd/s10/"
   },
-  "stage": "REFINE",
+  "stage": "SCOPE",
   "artifacts": {
     "sprint_doc": "docs/plans/sprints/backlog-02/sprint-10-alerting-spine.md",
     "dev_plan": null

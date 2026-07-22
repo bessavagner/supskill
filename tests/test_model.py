@@ -86,7 +86,15 @@ def test_terminal_set_is_exported_and_exact():
 
 
 def test_stage_vocabulary_is_exact():
-    assert [s.value for s in Stage] == ["SCOPE", "REFINE", "PLAN", "EXECUTE", "REVIEW"]
+    assert [s.value for s in Stage] == ["SCOPE", "PLAN", "EXECUTE", "REVIEW"]
+
+
+def test_a_legacy_refine_stage_loads_as_scope():
+    # SK-100 collapsed SCOPE and REFINE. A state.json frozen at the old REFINE
+    # stage across the upgrade resumes as SCOPE instead of failing to parse.
+    raw = json.loads(fixture_text())
+    raw["stage"] = "REFINE"
+    assert loads_state(json.dumps(raw)).stage is Stage.SCOPE
 
 
 @pytest.mark.parametrize("bad_entry", ["REFINE", "REVIEW", "execute", "START"])
