@@ -70,5 +70,14 @@ Your task:
 How to decompose the work into tasks is `writing-plans`' business and your
 judgment; this prompt does not pretend to specify it.
 
-Report back exactly two lines: the path you wrote, and the number of tasks. The
+Once the plan is written, **read it back** from disk and confirm it holds the
+plan you meant to write, **before you reply**. If that read fails or the file is
+empty, say exactly that in your reply instead of reporting a write you cannot
+confirm.
+
+Reply with one line and nothing else:
+
+    WROTE {OUTPUT_PATH} — <n> tasks
+
+Nothing parses your reply for content: the conductor reads the document. The
 document is the deliverable, not your report.

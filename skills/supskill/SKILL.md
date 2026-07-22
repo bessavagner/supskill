@@ -472,7 +472,7 @@ phrasings of the same option. That part is yours.
 
 ## The REVIEW stage
 
-PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Dispatch discipline, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
+PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Each writes its findings to its own `<scratch>/review-findings-<label>.md`, and you read that file — a reviewer's chat reply is a liveness signal, never the findings. Dispatch discipline, the collection rule, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
 ## Gate 3 — one decision, not two
 
 Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every open blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped.

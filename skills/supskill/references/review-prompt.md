@@ -9,6 +9,8 @@ label, and both are dispatched before either's output is read.
 - `{REVIEWER_LABEL}` — this dispatch's own label, `reviewer-a` or `reviewer-b`
 - `{REVIEW_PACKAGE_PATH}` — the whole-branch diff to review, `<scratch>/review-final.diff`
 - `{REPO_ROOT}` — the repository this diff was taken against
+- `{FINDINGS_PATH}` — where this reviewer's finding list must be written,
+  `<scratch>/review-findings-{REVIEWER_LABEL}.md` (derived by the conductor)
 
 ---
 
@@ -41,7 +43,22 @@ production callers; read for exactly that failure mode, not for style.
 - `description`: what you found, in your own words
 - `location`: `file:line` or the path — whatever actually pins it down
 
-Report your finding list as your final message. Nothing else consumes your
-output, and there is no second round: this is not a conversation. You do not
-know whether you are `reviewer-a` or `reviewer-b` to any other agent, and no other agent's findings are visible to you — review the diff on its own
-merits, not against a guess at what a second reviewer might say.
+**Write that list to {FINDINGS_PATH}** — exactly that path, nowhere else. The
+file is your deliverable; this conversation is not. Found nothing you can
+defend? Write the file anyway, containing the single line `no findings` — an
+empty review and a lost review must not look alike to the conductor.
+
+Then **read it back** from disk and confirm it holds every finding you meant to
+record, **before you reply**. If that read fails, or the file is empty, or it is
+missing findings, say exactly that in your reply instead of reporting a write
+you cannot confirm.
+
+Reply with one line and nothing else:
+
+    WROTE {FINDINGS_PATH} — <n> findings
+
+Nothing parses your reply for content: the conductor reads the file. There is no
+second round, and this is not a conversation. You do not know whether you are
+`reviewer-a` or `reviewer-b` to any other agent, and no other agent's findings
+are visible to you — review the diff on its own merits, not against a guess at
+what a second reviewer might say.
