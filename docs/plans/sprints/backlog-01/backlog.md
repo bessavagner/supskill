@@ -158,8 +158,20 @@ too, not just at E6.
 
 | ID | Story | Pts | Pri | Status |
 |---|---|---|---|---|
-| SK-070 | Fixture repo + toy two-sprint backlog; end-to-end run. Needs real LLM calls — manual and gated, not in the default suite. | 5 | M | ☐ |
-| SK-071 | **Drive blinkebot S11 for real.** If it cannot run one sprint the operator would have run anyway, it does not ship. | 5 | M | ☐ |
+| SK-070 | Fixture repo + toy two-sprint backlog; end-to-end run. Needs real LLM calls — manual and gated, not in the default suite. | 5 | M | ☑ |
+| SK-071 | **Drive blinkebot S11 for real.** If it cannot run one sprint the operator would have run anyway, it does not ship. | 5 | M | ☑ |
+
+**Closed on three reports, not one.** `fixture-run-2026-07-19` cleared SK-070. SK-071 took
+two runs to close honestly: `blinkebot-s17-2026-07-20` proved every mechanism against a
+project the operator depends on, but that sprint never reached Gate 3, never merged, and its
+feature shipped through a non-supskill path — a pass with a caveat, not a pass.
+`playset-s1-2026-07-22` closed the loop: a real greenfield project driven from three tracked
+files and no code, through all five stages and all three gates, to merged code on `main`
+with 165 tests green. Its PAR pass caught a Critical defect that had already survived 165
+passing tests, two rounds of task review and a nine-task drain, then routed it into that
+project's backlog as scheduled work. That report also carries eight findings against
+supskill itself, three of which no fixture repo could have produced — see
+`validation/reports/` (gitignored; point-in-time run records, not tracked source).
 
 ---
 
