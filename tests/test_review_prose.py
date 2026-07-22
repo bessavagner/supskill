@@ -64,6 +64,26 @@ def test_review_notes_state_the_aggregation_rule_and_the_verbs_exact_flags():
     assert "--finding" in text and "--location" in text
 
 
+def test_review_notes_read_each_reviewers_findings_from_disk_not_from_the_reply():
+    text = (REFERENCES / "review-notes.md").read_text(encoding="utf-8")
+    assert "review-findings-reviewer-a.md" in text
+    assert "review-findings-reviewer-b.md" in text
+    assert "never the reply" in text.lower()
+
+
+def test_review_notes_treat_a_missing_or_empty_findings_file_as_a_failed_dispatch():
+    # the silent failure this replaces: both reviewers returned a placeholder and
+    # the run recorded zero findings as though the diff were clean
+    text = (REFERENCES / "review-notes.md").read_text(encoding="utf-8")
+    assert "failed dispatch" in text.lower()
+    assert "not" in text.lower() and "no findings" in text.lower()
+
+
+def test_the_review_stage_names_the_findings_path_it_dispatches_with():
+    section = review_section()
+    assert "review-findings-" in section
+
+
 def gate3_section() -> str:
     return _section("## Gate 3")
 

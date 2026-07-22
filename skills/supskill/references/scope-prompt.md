@@ -45,6 +45,13 @@ Your task:
    why this sprint; capacity & sequencing; the stories; a risks & mitigations
    table; exit criteria.
 7. Write the finished doc to {OUTPUT_PATH} — exactly that path, nowhere else.
+   Then **read it back** from disk and confirm it holds the document you meant
+   to write, **before you reply**. If that read fails or the file is empty, say
+   exactly that in your reply instead of reporting a write you cannot confirm.
 
-Report back exactly two lines: the path you wrote, and the committed points.
-The document is the deliverable, not your report.
+Reply with one line and nothing else:
+
+    WROTE {OUTPUT_PATH} — <committed> pts
+
+Nothing parses your reply for content: the conductor reads the document. The
+document is the deliverable, not your report.

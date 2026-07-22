@@ -16,6 +16,28 @@ competitive frame's entire point (D9). Cost each dispatch as it completes:
 `cost --stage REVIEW --label reviewer-a` / `cost --stage REVIEW --label
 reviewer-b`.
 
+Each dispatch also carries its own `{FINDINGS_PATH}`:
+`<scratch>/review-findings-reviewer-a.md` and
+`<scratch>/review-findings-reviewer-b.md`. The two paths differ by label alone,
+and neither reviewer is told the other's.
+
+## Collection — the file, never the reply
+
+**Read each reviewer's findings from its `{FINDINGS_PATH}`, never the reply.**
+A dispatched subagent's final message is not a supported interface: across three
+validation runs about a third of all dispatches returned a placeholder while
+having genuinely done the work, and both PAR reviewers did so on the run that
+made this rule. The reply is a liveness signal — read the file.
+
+A `{FINDINGS_PATH}` that is missing, unreadable, or empty is a
+**failed dispatch**, and never "this reviewer found nothing": a reviewer with
+nothing to report writes the literal `no findings` instead, so the two cases
+cannot be confused. Re-dispatch that one reviewer ONCE, on the identical
+filled template.
+Still no file the second time → that is a **blocker**, carried into Gate 3 with
+the other reviewer's findings recorded as normal. Never aggregate a review that
+lost a side, and never let a lost file read as a clean diff.
+
 ## Matching
 
 Which finding from `reviewer-a` corresponds to which from `reviewer-b` is

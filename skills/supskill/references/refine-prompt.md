@@ -71,6 +71,14 @@ If this is a re-dispatch, fix every audit failure below before anything else:
 
 {AUDIT_FAILURES}
 
-Report back a short summary only: the point deltas and the count of findings.
-The document is the deliverable, not your report — nobody trusts the report
-alone.
+Once the doc is edited, **read it back** from disk and confirm your edits are
+actually in the file, **before you reply**. If that read fails, or the file is
+empty, or an edit you made is not there, say exactly that in your reply instead
+of reporting an edit you cannot confirm.
+
+Reply with one line and nothing else:
+
+    WROTE {SPRINT_DOC_PATH} — <n> DoR findings
+
+Nothing parses your reply for content: the conductor reads the document. The
+document is the deliverable, not your report — nobody trusts the report alone.

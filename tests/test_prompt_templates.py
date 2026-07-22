@@ -15,6 +15,18 @@ REVIEW = REFERENCES / "review-prompt.md"
 TEMPLATES = (SCOPE, REFINE, PLAN, REVIEW)
 EXECUTION_SUB_SKILLS = ("subagent-driven-development", "executing-plans")
 
+# Every dispatch's deliverable is a file at a conductor-chosen path, never the
+# subagent's chat reply. Measured across three validation runs, ~10 of 29
+# dispatches returned a placeholder final message while having genuinely done
+# the work; REVIEW lost both reviewers' findings outright because it had no
+# file to fall back on. The path placeholder each template must carry:
+DELIVERABLE_PATH = {
+    SCOPE: "{OUTPUT_PATH}",
+    REFINE: "{SPRINT_DOC_PATH}",
+    PLAN: "{OUTPUT_PATH}",
+    REVIEW: "{FINDINGS_PATH}",
+}
+
 
 def test_scope_template_names_its_placeholders():
     text = SCOPE.read_text(encoding="utf-8")
@@ -97,7 +109,9 @@ def test_refine_template_states_the_two_constraints_and_the_field_list():
 
 def test_review_template_names_its_placeholders():
     text = REVIEW.read_text(encoding="utf-8")
-    for placeholder in ("{REVIEWER_LABEL}", "{REVIEW_PACKAGE_PATH}", "{REPO_ROOT}"):
+    for placeholder in (
+        "{REVIEWER_LABEL}", "{REVIEW_PACKAGE_PATH}", "{REPO_ROOT}", "{FINDINGS_PATH}",
+    ):
         assert placeholder in text, placeholder
 
 
@@ -117,6 +131,43 @@ def test_review_template_asks_for_severity_and_a_defensible_location():
     text = REVIEW.read_text(encoding="utf-8")
     assert "Critical" in text and "Important" in text and "Minor" in text
     assert "location" in text.lower()
+
+
+def test_every_dispatch_template_names_a_conductor_chosen_deliverable_path():
+    for template, placeholder in DELIVERABLE_PATH.items():
+        assert placeholder in template.read_text(encoding="utf-8"), template.name
+
+
+def test_every_dispatch_template_requires_a_read_back_before_replying():
+    # the confirmation is what makes a lost write loud: an agent that cannot read
+    # its own deliverable back says so instead of replying as if it had written it
+    for template in TEMPLATES:
+        text = template.read_text(encoding="utf-8").lower()
+        assert "read it back" in text, template.name
+        assert "before you reply" in text, template.name
+
+
+def test_every_dispatch_template_makes_the_reply_a_status_line_nothing_parses():
+    for template in TEMPLATES:
+        text = template.read_text(encoding="utf-8")
+        assert "WROTE " in text, template.name
+        assert "nothing parses your reply for content" in text.lower(), template.name
+
+
+def test_no_dispatch_template_makes_the_chat_reply_the_deliverable():
+    # the finding this whole rule exists for: a template that consumes the final
+    # message has no fallback when the harness returns a placeholder instead
+    for template in TEMPLATES:
+        text = template.read_text(encoding="utf-8").lower()
+        assert "as your final message" not in text, template.name
+        assert "nothing else consumes your output" not in text, template.name
+
+
+def test_review_template_writes_its_findings_to_the_file_the_conductor_reads():
+    text = REVIEW.read_text(encoding="utf-8")
+    assert "{FINDINGS_PATH}" in text
+    assert "one finding per line" in text  # the on-disk format, unchanged
+    assert "final message" not in text.lower()
 
 
 def test_refine_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():
