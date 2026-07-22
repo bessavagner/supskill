@@ -70,9 +70,11 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 136 pts.** Expect this to grow — every blinkebot sprint grew its committed points at DoR
+**Total: 136 pts for v1 (E1–E8, all shipped), plus 35 pts of E9 post-validation findings.**
+Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
-process working, not a planning failure.
+process working, not a planning failure. E9 is the exception's proof: the E8 runs turned the
+same discipline on supskill and found 35 points of real work, filed rather than remembered.
 
 ---
 
@@ -172,6 +174,41 @@ passing tests, two rounds of task review and a nine-task drain, then routed it i
 project's backlog as scheduled work. That report also carries eight findings against
 supskill itself, three of which no fixture repo could have produced — see
 `validation/reports/` (gitignored; point-in-time run records, not tracked source).
+
+---
+
+## E9 — Findings from the E8 validation runs (35 pts)
+
+Written back from the three E8 reports (`validation/reports/`, gitignored) so the punch
+list they produced lives in git rather than in point-in-time run records. Every row cites
+the run that surfaced it. These are defects and design gaps in shipped v1 code, not new
+capability — E9 is the same principle E8 proved, turned on supskill itself: what a real run
+finds is scheduled, not remembered.
+
+**Already fixed, recorded for context, not scheduled:** the stage templates depended on a
+dispatched subagent's final chat message, and about a third of dispatches returned a
+placeholder while having done the work — at REVIEW a lost review read as a clean diff. Fixed
+in `7dfb0f9` (v0.2.1): every dispatch writes its deliverable to a conductor-derived path and
+the conductor reads the file, never the reply. The playset s2 run confirmed it held at the
+stage that failed in s1. This row exists so the fix is not re-litigated; it needs no work.
+
+| ID | Story | Pts | Pri | Status |
+|---|---|---|---|---|
+| SK-100 | **Collapse SCOPE and REFINE; drop the `pm-execution:sprint-plan` dispatch and the fabricated capacity model.** SCOPE dispatches `sprint-plan` (`scope-prompt.md:34`) whose two core outputs are both null here: story selection is already the backlog's job (recommended order + first-unchecked epic), and capacity is a hard-coded constant the template invents — "working capacity ~34 pts, ~18% buffer, ~28 committable" (`scope-prompt.md:36-37`) — with no team, velocity, or history behind it. SCOPE's output is never gated (Gate 1 is on the *refined* doc), so it produces an ungated intermediate REFINE substantially rewrites anyway, at 50–119k tokens per run (playset s1/s2). REFINE is the load-bearing stage and stays. Fold the two into one stage that seeds the sprint doc from the epic's backlog rows and reads live source in one pass; drop the `pm-execution` dependency, shrinking the cross-marketplace install surface to one plugin. Keep both gates and the PLAN dispatch untouched. **Anchor of this epic — plan it first.** (playset s1/s2; capacity finding independently reached by a second, non-supskill session.) | 8 | M | ☐ |
+| SK-101 | **Finish the story-id-prefix feature.** The parsers honor the configured prefix (`plan_coverage.py:31,78`, `proofs.py`) but the prompt templates still hard-code `SK-0xx` (`scope-prompt.md:41`, `plan-prompt.md:46`, `replan-shapes.md:23`), and `supskill-audit --proofs` passes vacuously on a prefix mismatch rather than refusing. On the playset run (`PLS` prefix) only the REFINE agent noticing by judgment kept the run alive; the mechanical net did not catch it. Templates parameterize on the prefix; the audit refuses a doc whose story ids do not match the configured prefix. The one shipped half-feature that bit two of three validation targets. | 5 | M | ☐ |
+| SK-102 | A blocker silently cancels its story's unrun plan headings. When one story spans several plan task headings, blocking it mid-way parks the remaining headings without a record an operator would see. Discovered structurally, not triggered (playset plans happened not to hit it). Make the cancellation observable — the parked headings and the blocker that parked them land in the trail Gate 3 reads. | 3 | M | ☐ |
+| SK-103 | Give `block` an inverse. After both s1 blockers were resolved, `show --json` still reported "open blockers: 2" and Gate 3 presented two settled decisions as live ones — the operator reconstructs resolution from the tasks trail. A blocker whose task reached a terminal non-blocked status should read as resolved. (playset s1.) | 3 | M | ☐ |
+| SK-104 | Detect a stale `review-final.diff` between EXECUTE and REVIEW. On s1, out-of-band commits landed after the halt and the recorded review package no longer matched the branch; the conductor caught it by judgment and regenerated. Make the staleness detectable mechanically — REVIEW refuses or regenerates when HEAD has moved past the package's recorded base. (playset s1.) | 3 | M | ☐ |
+| SK-105 | Dispatch scratch hygiene: a fix subagent ran `git add -A` and swept `.omc/` harness state into a commit; the controller caught it and reset. A dispatched subagent must not be able to stage the whole working tree — scope its commits to its declared files, or guard foreign state at the dispatch boundary. (playset s1.) | 3 | M | ☐ |
+| SK-106 | Runtime preflight that the dispatched skills resolve. If a dependency is missing, disabled, or its marketplace unreachable, a stage dispatches a skill that does not exist and the stage improvises — the exact failure the project exists to prevent. Refuse at run start when a required skill is unresolvable, the way playset's own PLS-040 refuses on a missing binary. (both runs, by construction.) | 3 | M | ☐ |
+| SK-107 | Guard against `writing-plans` laundering a false proof. On s1 the plan ran its own code in a scratch project, got 127 green, and its self-review mapped an acceptance criterion to a test — while the shipped `derive_path` was not injective and the "green" suite never checked collisions. s2 did not repeat it, so this is monitor-and-guard, not confirmed-systematic: the PLAN template should ask for verified *mechanisms* and interfaces, and withhold implementation bodies, so EXECUTE's reviewer independence reviews reasoned code rather than transcribed code. (playset s1; not reproduced s2.) | 3 | C | ☐ |
+| SK-108 | Decide what append-only writeback means, and enforce it. The generative-writeback shape is append-only by prose, not mechanism: s1's writeback made 0 deletions and left the summary total stale; s2's made 3 deletions to correct the total. Same conductor, same shape, opposite call. Either enforce strict append-only and treat the roll-up total as a permitted exception, or enforce it in code — but not leave it to per-run interpretation. (playset s1 vs s2 — the finding a fixture repo could not produce.) | 2 | S | ☐ |
+| SK-109 | Measure teammate-dispatch token cost instead of guessing it. The `7dfb0f9` fix delivers *findings* by file but PAR reviewers run as mailbox teammates whose transcripts the conductor cannot retrieve, so it recorded each at an estimated 70k — the ledger now silently mixes measured and estimated rows with no marker. Either dispatch reviewers as trackable tasks, or mark estimated cost rows as estimates. (playset s2.) | 2 | C | ☐ |
+
+**Sequencing.** SK-100 is the anchor and is planned first — it is a design change the rest
+sit downstream of, and it removes SK-108's capacity surface as a side effect. SK-101 is the
+only High: it is a shipped half-feature and gates any non-`SK` project. The rest are M/C and
+independent of each other.
 
 ---
 
