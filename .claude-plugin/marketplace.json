@@ -5,7 +5,7 @@
     "name": "Vagner Bessa",
     "url": "https://github.com/bessavagner"
   },
-  "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official", "pm-skills"],
+  "allowCrossMarketplaceDependenciesOn": ["claude-plugins-official"],
   "plugins": [
     {
       "name": "supskill",

@@ -8,7 +8,6 @@
   "license": "MIT",
   "keywords": ["sprint", "conductor", "orchestration", "gates", "backlog"],
   "dependencies": [
-    { "name": "superpowers", "marketplace": "claude-plugins-official" },
-    { "name": "pm-execution", "marketplace": "pm-skills" }
+    { "name": "superpowers", "marketplace": "claude-plugins-official" }
   ]
 }

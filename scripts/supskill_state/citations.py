@@ -1,4 +1,5 @@
-"""Citation audit (SK-024): the mechanical floor under REFINE (F-5, S3 DoR finding 4).
+"""Citation audit (SK-024): the mechanical floor under the SCOPE stage's
+refinement pass (F-5, S3 DoR finding 4; SK-100 merged REFINE into SCOPE).
 
 Extracts backtick-wrapped `path:line` / `path:start-end` tokens (the path must
 carry a file extension - `file:line` prose placeholders and skill names like
