@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, config, plan_guard, replan_guard, worktree
+from . import commands, commit_scope, config, plan_guard, preflight, replan_guard, worktree
 from .errors import StateError
 
 
@@ -28,7 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
+    _add_commit_scope_guard(subparsers)
     _add_replan_guard(subparsers)
+    _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
     _add_review(subparsers)
@@ -198,6 +200,27 @@ def _cmd_plan_guard(args) -> int:
     return 0
 
 
+def _add_commit_scope_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "commit-scope-guard",
+        help="did a task's commits (BASE..HEAD) sweep in foreign harness state? exit 1 = refuse",
+    )
+    sub.add_argument("--before", required=True, help="the task's BASE SHA (rev-parse HEAD before the dispatch)")
+    sub.add_argument("--after", required=True, help="HEAD after the task's implementer and fix dispatches")
+    sub.add_argument("--dir", default=".", dest="root", help="the dispatch root (repo or worktree); default cwd")
+    sub.set_defaults(func=_cmd_commit_scope_guard)
+
+
+def _cmd_commit_scope_guard(args) -> int:
+    changed = commit_scope.git_changed_paths(args.root, args.before, args.after)
+    foreign = commit_scope.foreign_paths(changed)
+    if foreign:
+        print(commit_scope.refusal(foreign, args.before, args.after), file=sys.stderr)
+        return 1
+    print(f"commit-scope-guard: no foreign state in {args.before.strip()}..{args.after.strip()}")
+    return 0
+
+
 def _add_replan_guard(subparsers) -> None:
     sub = subparsers.add_parser(
         "replan-guard",
@@ -217,6 +240,38 @@ def _cmd_replan_guard(args) -> int:
         print(replan_guard.refusal(args.shape), file=sys.stderr)
         return 1
     print(f"replan-guard: {args.shape} is an amending shape, not a supersede")
+    return 0
+
+
+def _add_preflight(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "preflight",
+        help="refuse at run start if a still-to-run stage's dispatched skill will not resolve",
+    )
+    sub.add_argument("--stage", required=True, help="current stage from show --json (SCOPE|PLAN|EXECUTE|REVIEW)")
+    sub.add_argument(
+        "--skill",
+        action="append",
+        default=[],
+        dest="skills",
+        metavar="NAME=DIR",
+        help="a resolved skill as name=base-dir; repeat the flag. Omit one you could not resolve.",
+    )
+    sub.set_defaults(func=_cmd_preflight)
+
+
+def _cmd_preflight(args) -> int:
+    resolved: dict[str, str] = {}
+    for item in args.skills:
+        name, sep, base = item.partition("=")
+        if not sep or not name or not base:
+            raise StateError(f"--skill expects NAME=DIR, got {item!r}")
+        resolved[name] = base
+    problems = preflight.unresolved(args.stage, resolved)
+    if problems:
+        print(preflight.refusal(args.stage, problems), file=sys.stderr)
+        return 1
+    print(f"preflight: every skill the stages from {args.stage} onward dispatch resolves")
     return 0
 
 
