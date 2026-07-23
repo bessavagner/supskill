@@ -70,7 +70,7 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 136 pts for v1 (E1–E8, all shipped), plus 35 pts of E9 post-validation findings.**
+**Total: 136 pts for v1 (E1–E8, all shipped), plus 36 pts of E9 post-validation findings.**
 Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure. E9 is the exception's proof: the E8 runs turned the
@@ -177,9 +177,9 @@ supskill itself, three of which no fixture repo could have produced — see
 
 ---
 
-## E9 — Findings from the E8 validation runs (35 pts)
+## E9 — Findings from the E8 validation runs (36 pts)
 
-Written back from the three E8 reports (`validation/reports/`, gitignored) so the punch
+Written back from the E8 reports (`validation/reports/`, gitignored) so the punch
 list they produced lives in git rather than in point-in-time run records. Every row cites
 the run that surfaced it. These are defects and design gaps in shipped v1 code, not new
 capability — E9 is the same principle E8 proved, turned on supskill itself: what a real run
@@ -203,7 +203,8 @@ stage that failed in s1. This row exists so the fix is not re-litigated; it need
 | SK-106 | Runtime preflight that the dispatched skills resolve. If a dependency is missing, disabled, or its marketplace unreachable, a stage dispatches a skill that does not exist and the stage improvises — the exact failure the project exists to prevent. Refuse at run start when a required skill is unresolvable, the way playset's own PLS-040 refuses on a missing binary. (both runs, by construction.) | 3 | M | ☐ |
 | SK-107 | Guard against `writing-plans` laundering a false proof. On s1 the plan ran its own code in a scratch project, got 127 green, and its self-review mapped an acceptance criterion to a test — while the shipped `derive_path` was not injective and the "green" suite never checked collisions. s2 did not repeat it, so this is monitor-and-guard, not confirmed-systematic: the PLAN template should ask for verified *mechanisms* and interfaces, and withhold implementation bodies, so EXECUTE's reviewer independence reviews reasoned code rather than transcribed code. (playset s1; not reproduced s2.) | 3 | C | ☐ |
 | SK-108 | Decide what append-only writeback means, and enforce it. The generative-writeback shape is append-only by prose, not mechanism: s1's writeback made 0 deletions and left the summary total stale; s2's made 3 deletions to correct the total. Same conductor, same shape, opposite call. Either enforce strict append-only and treat the roll-up total as a permitted exception, or enforce it in code — but not leave it to per-run interpretation. (playset s1 vs s2 — the finding a fixture repo could not produce.) | 2 | S | ☐ |
-| SK-109 | Measure teammate-dispatch token cost instead of guessing it. The `7dfb0f9` fix delivers *findings* by file but PAR reviewers run as mailbox teammates whose transcripts the conductor cannot retrieve, so it recorded each at an estimated 70k — the ledger now silently mixes measured and estimated rows with no marker. Either dispatch reviewers as trackable tasks, or mark estimated cost rows as estimates. (playset s2.) | 2 | C | ☐ |
+| SK-109 | Measure teammate-dispatch token cost instead of guessing it. The `7dfb0f9` fix delivers *findings* by file but PAR reviewers run as mailbox teammates whose transcripts the conductor cannot retrieve, so it recorded each at an estimated 70k — the ledger now silently mixes measured and estimated rows with no marker. Either dispatch reviewers as trackable tasks, or mark estimated cost rows as estimates. (playset s2; s3 corroborated — s3's REVIEW rows came back measured, `63,016·11` / `61,307·11`, but 0.3.0 changed no accounting code, so that was operational luck, not a fix. The estimated/measured ambiguity is still unmarked.) | 2 | C | ☐ |
+| SK-110 | The collapsed SCOPE stage still logs its cost under the pre-collapse label `refine`. After SK-100 folded REFINE into SCOPE, the conductor still runs `cost --stage SCOPE --label refine` (`SKILL.md:128`, and `--label refine-retry` at `SKILL.md:136`), so `costs.jsonl` carries a `{"stage": "SCOPE", "label": "refine"}` row that reads as a contradiction — the one place the collapse left a seam showing. Nothing parses the label, so this is cosmetic: relabel it `scope` (or drop the label) so the ledger names the stage that actually ran. (playset s3 — first run under SK-100.) | 1 | C | ☐ |
 
 **Sequencing.** SK-100 is the anchor and is planned first — it is a design change the rest
 sit downstream of, and it removes SK-108's capacity surface as a side effect. SK-101 is the
