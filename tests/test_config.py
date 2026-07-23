@@ -99,3 +99,29 @@ def test_commands_set_story_id_prefix_raises_state_error_on_corrupted_config(tmp
     path.write_text("{not valid json", encoding="utf-8")
     with pytest.raises(StateError, match="config.json"):
         set_story_id_prefix("BLK", root=tmp_path)
+
+
+def test_cli_config_get_prints_the_configured_prefix(tmp_path, monkeypatch, capsys):
+    from supskill_state.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    assert main(["config", "--story-id-prefix", "PLS"]) == 0
+    capsys.readouterr()  # drain the "set story id prefix" line
+    assert main(["config", "--get"]) == 0
+    assert capsys.readouterr().out.strip() == "PLS"
+
+
+def test_cli_config_get_defaults_to_sk_when_unset(tmp_path, monkeypatch, capsys):
+    from supskill_state.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    assert main(["config", "--get"]) == 0
+    assert capsys.readouterr().out.strip() == "SK"
+
+
+def test_cli_config_with_neither_flag_is_refused(tmp_path, monkeypatch, capsys):
+    from supskill_state.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    assert main(["config"]) == 1
+    assert "story-id-prefix" in capsys.readouterr().err
