@@ -4,8 +4,9 @@ For the next session (a fresh Claude Code on this repo). High-signal state + wha
 
 ## Where things stand
 
-- **Branch/remote:** `main` @ `64a3317`, **pushed** to `origin/main`. Working tree clean.
-- **Installed plugin the playset runs:** `…/plugins/cache/supskill/supskill/0.3.0/` — i.e. **0.3.0**. `plugin.json`/`pyproject.toml` on `main` are still `0.3.0` (no bump since release), so the fixes merged this session are **on `main` but not released**, and the playset's runs do not have them yet. See "Open threads → Release".
+- **Branch/remote:** `main` **pushed** to `origin/main`, working tree clean.
+- **Released: `v0.4.0`** (commit `00b9dd2`, tag pushed to origin). Carries SK-101, SK-105, SK-106. Both manifests and `uv.lock` are at 0.4.0 and the version-consistency test passes.
+- **The local install is still 0.3.0.** `~/.claude/plugins/cache/supskill/supskill/` holds `0.1.0…0.3.0`; a new cache dir appears only after a plugin update pulls the new tag. Until the operator updates the plugin, `/supskill run` (and the playset) still execute 0.3.0 code without these fixes. Update with `claude plugin update supskill@supskill` (or the `/plugin` UI), then confirm `…/cache/supskill/supskill/0.4.0/` exists.
 
 ## Done this session (all on `main`, pushed)
 
@@ -24,7 +25,7 @@ For the next session (a fresh Claude Code on this repo). High-signal state + wha
 
 ## Open threads (not started)
 
-1. **Release.** `main` carries SK-101, SK-105, SK-106 (and once the next plan lands, SK-111/112) but is still versioned `0.3.0`. The playset runs the installed 0.3.0 and won't get these until a release: bump `pyproject.toml` + `plugin.json` (there's a `test_plugin_version_matches_pyproject` guard tying them), tag, publish. `oh-my-claudecode:release` or a manual tag. Worth doing before the next playset validation run so it exercises the fixes, not the old code.
+1. **Release — done for 0.4.0; the local install still needs updating.** The release ritual is: bump `pyproject.toml` + `.claude-plugin/plugin.json` to the same version (a `test_plugin_version_matches_pyproject` guard ties them), run `uv lock` so `uv.lock` follows (it silently drifted after 0.3.0 and needed a repair commit), `chore: release X.Y.Z — <headline>`, `git tag -a vX.Y.Z`, push both `main` and the tag. **Remaining step:** update the installed plugin to 0.4.0 so the next playset run exercises the fixes rather than 0.3.0 code. Repeat the ritual after SK-111/112 land.
 2. **Remaining E9 (open, M-priority):** SK-102 (blocker cancels unrun headings → make observable), SK-103 (`block` inverse / resolve), SK-104 (stale `review-final.diff` detection), SK-107 (now M — PLAN template must prove a novel test harness runnable; s5 gave a second instance). Lower: SK-108 (S), SK-109 (C), SK-110 (C — `cost --label refine` still live at `SKILL.md:128/136`, cosmetic), SK-113 (C — one-line halt-prose clarification).
 3. **Playset s5 itself** (separate repo `~/Documents/projetos/playset`) is halted at REVIEW: PLS-020/021 done, PLS-022 blocked on an httpx `ASGITransport` SSE-test hang (operator must pick option a/b/c — a: switch to `starlette.TestClient`, recommended), PLS-023 parked. That's the playset operator's call, not supskill work — it was the *source* of this session's findings.
 
