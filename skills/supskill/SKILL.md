@@ -310,6 +310,15 @@ exactly the D1 violation this stage exists to avoid.
   blocker and every advance yourself — **after** the task review, never on an
   implementer's word alone. An implementer that can write state can mark its own
   work done.
+- **Scope every task's commits to its own files.** After a task's implementer and
+  fix dispatches have committed — before recording any status — run, from the
+  dispatch root:
+  `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state commit-scope-guard --before <BASE> --after $(git -C <dispatch-root> rev-parse HEAD) --dir <dispatch-root>`
+  Exit 1 → **stop.** An implementer's `git add -A` swept a harness's state
+  (`.omc/`) or the conductor's own (`.supskill/`) into the commit. Report the
+  guard's message verbatim; do not record the task's status — its commit is
+  tainted. The remedy is the reset the guard names; this run is stopped for the
+  operator, the same restraint as the HEAD guard at PLAN.
 
 ### The drain
 
