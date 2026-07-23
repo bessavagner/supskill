@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, commit_scope, config, plan_guard, replan_guard, worktree
+from . import commands, commit_scope, config, plan_guard, preflight, replan_guard, worktree
 from .errors import StateError
 
 
@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_plan_guard(subparsers)
     _add_commit_scope_guard(subparsers)
     _add_replan_guard(subparsers)
+    _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
     _add_review(subparsers)
@@ -239,6 +240,38 @@ def _cmd_replan_guard(args) -> int:
         print(replan_guard.refusal(args.shape), file=sys.stderr)
         return 1
     print(f"replan-guard: {args.shape} is an amending shape, not a supersede")
+    return 0
+
+
+def _add_preflight(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "preflight",
+        help="refuse at run start if a still-to-run stage's dispatched skill will not resolve",
+    )
+    sub.add_argument("--stage", required=True, help="current stage from show --json (SCOPE|PLAN|EXECUTE|REVIEW)")
+    sub.add_argument(
+        "--skill",
+        action="append",
+        default=[],
+        dest="skills",
+        metavar="NAME=DIR",
+        help="a resolved skill as name=base-dir; repeat the flag. Omit one you could not resolve.",
+    )
+    sub.set_defaults(func=_cmd_preflight)
+
+
+def _cmd_preflight(args) -> int:
+    resolved: dict[str, str] = {}
+    for item in args.skills:
+        name, sep, base = item.partition("=")
+        if not sep or not name or not base:
+            raise StateError(f"--skill expects NAME=DIR, got {item!r}")
+        resolved[name] = base
+    problems = preflight.unresolved(args.stage, resolved)
+    if problems:
+        print(preflight.refusal(args.stage, problems), file=sys.stderr)
+        return 1
+    print(f"preflight: every skill the stages from {args.stage} onward dispatch resolves")
     return 0
 
 

@@ -83,7 +83,21 @@ Copy this checklist into your response and check items off as you go.
    decision (`null` = pending), each recorded artifact path, the `backlog`
    path, task counts by status, and open blockers. This report must come from
    the JSON alone — consult no memory of any prior conversation.
-5. **Dispatch on `stage`.** Look up `stage` in the table below and do exactly
+5. **Preflight the skills the remaining stages dispatch.** Before dispatching,
+   confirm every external skill a stage from the current `stage` onward will
+   dispatch actually resolves — a declared dependency can still be missing,
+   disabled, or its marketplace unreachable, and a stage that cannot load the
+   skill it dispatches improvises. For each required skill (PLAN dispatches
+   `superpowers:writing-plans`; EXECUTE dispatches `superpowers:subagent-driven-development`),
+   resolve its base directory by loading the skill — its payload's first line
+   is `Base directory for this skill: <abs path>`. A skill that will not load
+   at all is already the refusal: report it and stop. Then run, passing each
+   resolved skill as `name=<base-dir>`:
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state preflight --stage <stage> --skill writing-plans=<dir> --skill subagent-driven-development=<dir>`
+   (pass only the skills the remaining stages need; omit any you could not resolve —
+   the guard refuses by omission). Exit 1 → report verbatim and stop; do not
+   dispatch. Exit 0 → continue at step 6.
+6. **Dispatch on `stage`.** Look up `stage` in the table below and do exactly
    what it says. `stage` from `show --json` is the dispatch's only input.
 
 ## Dispatch table
