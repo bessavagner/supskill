@@ -37,6 +37,13 @@ GRAMMAR_LINE = (
 _PROOF = re.compile(r"^- \*\*proof:\*\* seam=(\S+) · impact=(\S+) · provable=(\S+)(?:\s.*)?$")
 _SECTION = re.compile(r"^##\s+(?!#)(.+?)\s*$")
 
+# A story-shaped heading with ANY uppercase prefix. Used only to tell a prefix
+# MISMATCH (a Stories section full of PLS-009 under an SK config) from a doc
+# that genuinely has no stories. SK-101: without this, parse_proof_lines returns
+# [] on a mismatch and every caller (supskill-audit --proofs, load-doc) reads
+# that as a clean pass - the exact hole the playset PLS run fell through.
+_STORY_SHAPED = re.compile(r"^###\s+.*?([A-Z][A-Z0-9]*-\d+)")
+
 
 def _story_pattern(story_prefix: str) -> re.Pattern[str]:
     return re.compile(rf"^###\s+.*?({re.escape(story_prefix)}-\d+)")
@@ -59,6 +66,7 @@ def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
     story: str | None = None
     in_stories = False
     required: list[str] = []  # story headings inside the Stories section, in order
+    foreign_ids: list[str] = []  # story-shaped headings in Stories that miss story_prefix
 
     for number, line in enumerate(text.splitlines(), start=1):
         section = _SECTION.match(line)
@@ -71,6 +79,11 @@ def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
             if in_stories:
                 required.append(story)
             continue
+        if in_stories:
+            shaped = _STORY_SHAPED.match(line)
+            if shaped:
+                foreign_ids.append(shaped.group(1))
+                continue
         match = _PROOF.match(line)
         if not match:
             continue
@@ -92,6 +105,15 @@ def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
             continue
         seen.add(story)
         proofs.append(ProofLine(story=story, seam=seam, impact=impact, provable=provable))
+
+    if not required and foreign_ids:
+        prefixes = sorted({fid.rsplit("-", 1)[0] for fid in foreign_ids})
+        suggestion = "/".join(prefixes)
+        raise StateError(
+            f"story-id prefix mismatch: the Stories section uses {suggestion} "
+            f"(e.g. {foreign_ids[0]}) but the configured prefix is {story_prefix}; "
+            f"run: supskill config --story-id-prefix {prefixes[0]}"
+        )
 
     for story_id in required:
         if story_id not in seen:

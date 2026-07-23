@@ -110,4 +110,21 @@ def test_proofs_flag_without_config_still_gates_on_the_default_sk_prefix(tmp_pat
         "- **proof:** seam=unit · impact=local · provable=offline\n"
     )
     assert main(["doc.md", "--proofs"]) == 1
-    assert "before any" in capsys.readouterr().err
+    # BLK-103 under the default SK config is a prefix mismatch (SK-101), a more
+    # precise diagnosis than the old generic "before any" symptom.
+    assert "prefix mismatch" in capsys.readouterr().err
+
+
+def test_proofs_flag_refuses_a_story_id_prefix_mismatch(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    doc = tmp_path / "doc.md"
+    doc.write_text(
+        "## Stories\n\n"
+        "### PLS-009 — close the guard · 2 · M\n"
+        "- **proof:** seam=unit · impact=local · provable=offline\n",
+        encoding="utf-8",
+    )
+    # config defaults to SK; the doc uses PLS -> the audit must refuse, not pass vacuously
+    assert main(["doc.md", "--proofs"]) == 1
+    assert "prefix mismatch" in capsys.readouterr().err
