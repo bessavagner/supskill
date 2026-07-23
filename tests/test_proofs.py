@@ -93,13 +93,14 @@ def test_custom_story_prefix_is_honored():
 
 
 def test_a_heading_that_does_not_match_the_configured_prefix_is_not_a_story_heading():
-    # SK-001 does not match story_prefix="BLK" - the proof line below it has no heading
+    # SK-001 does not match story_prefix="BLK" - this is a prefix mismatch (SK-101),
+    # a more precise diagnosis than the old generic "before any" symptom.
     doc = """## Stories
 
 ### SK-001 — a story · 3 · M
 - **proof:** seam=unit · impact=local · provable=offline
 """
-    with pytest.raises(StateError, match="before any"):
+    with pytest.raises(StateError, match="prefix mismatch"):
         parse_proof_lines(doc, story_prefix="BLK")
 
 
@@ -108,3 +109,29 @@ def test_the_missing_heading_violation_names_the_configured_prefix():
         parse_proof_lines(
             "- **proof:** seam=unit · impact=local · provable=offline\n", story_prefix="BLK"
         )
+
+
+def test_a_stories_section_with_a_foreign_prefix_is_refused():
+    doc = GOOD.replace("SK-001", "PLS-001")
+    with pytest.raises(StateError, match="prefix mismatch"):
+        parse_proof_lines(doc, story_prefix="SK")
+
+
+def test_the_mismatch_message_names_both_prefixes_and_the_config_command():
+    doc = GOOD.replace("SK-001", "PLS-009")
+    with pytest.raises(StateError) as exc:
+        parse_proof_lines(doc, story_prefix="SK")
+    message = str(exc.value)
+    assert "PLS" in message and "SK" in message
+    assert "supskill config --story-id-prefix PLS" in message
+
+
+def test_a_matching_configured_prefix_still_parses():
+    doc = GOOD.replace("SK-001", "PLS-001")
+    assert parse_proof_lines(doc, story_prefix="PLS")[0].story == "PLS-001"
+
+
+def test_a_stories_section_with_no_story_headings_is_not_a_mismatch():
+    # narrow rule: refuse a MISMATCH, not mere emptiness
+    doc = "## Stories\n\nprose only, no story headings yet\n"
+    assert parse_proof_lines(doc, story_prefix="SK") == []

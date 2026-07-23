@@ -63,8 +63,9 @@ Duties, in order:
      goal; a *why this sprint* paragraph; a sequencing note; the stories; a
      risks & mitigations table; exit criteria;
    - every story heading carries its backlog id, exactly one story per id:
-     `### SK-0xx — <title> · <points> · <priority>` (use the backlog's own
-     story-id prefix). Downstream stages join backlog rows to stories by these
+     `### {STORY_ID_PREFIX}-0xx — <title> · <points> · <priority>` — the
+     `{STORY_ID_PREFIX}` is this project's configured story-id prefix, filled in
+     by the conductor. Downstream stages join backlog rows to stories by these
      ids; a missing id breaks the join;
    - a **Context** paragraph per story, grounded in `file:line` citations;
    - exact acceptance criteria per story — testable statements, not themes;

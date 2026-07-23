@@ -20,7 +20,7 @@ already edited it this way, by hand, in a `docs:` commit.
 
 ## Shape 2 — park at a live boundary
 
-`task --id <SK-0xx> --status PARKED --note "<the blocker that parked it>"` —
+`task --id <story-id> --status PARKED --note "<the blocker that parked it>"` —
 the verb that already exists (`scripts/supskill_state/commands.py:331-387`).
 The sprint itself is **not** advanced past `REVIEW`; name which live boundary
 stopped it in the report.

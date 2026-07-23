@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, plan_guard, replan_guard, worktree
+from . import commands, config, plan_guard, replan_guard, worktree
 from .errors import StateError
 
 
@@ -290,17 +290,28 @@ def _cmd_review(args) -> int:
 
 
 def _add_config(subparsers) -> None:
-    sub = subparsers.add_parser("config", help="set project-level config, e.g. the story-id prefix")
+    sub = subparsers.add_parser(
+        "config", help="read or set project-level config, e.g. the story-id prefix"
+    )
     sub.add_argument(
         "--story-id-prefix",
-        required=True,
         dest="story_id_prefix",
         help="uppercase prefix used by this project's story ids, e.g. BLK for BLK-103 (default: SK)",
+    )
+    sub.add_argument(
+        "--get",
+        action="store_true",
+        help="print the configured story-id prefix (SK if unset) and exit",
     )
     sub.set_defaults(func=_cmd_config)
 
 
 def _cmd_config(args) -> int:
+    if args.get:
+        print(config.load_story_id_prefix())
+        return 0
+    if not args.story_id_prefix:
+        raise StateError("config: pass --story-id-prefix <PREFIX> to set, or --get to read")
     previous = commands.set_story_id_prefix(args.story_id_prefix)
     print(f"set story id prefix: {args.story_id_prefix} (was: {previous})")
     return 0

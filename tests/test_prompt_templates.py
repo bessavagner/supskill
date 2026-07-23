@@ -34,7 +34,7 @@ def test_scope_template_names_its_placeholders():
     text = SCOPE.read_text(encoding="utf-8")
     for placeholder in (
         "{SPRINT_ID}", "{BACKLOG_PATH}", "{OUTPUT_PATH}", "{REPO_ROOT}",
-        "{EXEMPLAR_DOCS}", "{AUDIT_FAILURES}",
+        "{EXEMPLAR_DOCS}", "{AUDIT_FAILURES}", "{STORY_ID_PREFIX}",
     ):
         assert placeholder in text, placeholder
 
@@ -93,7 +93,10 @@ def test_no_dispatch_template_line_instructs_an_execution_sub_skill():
 
 def test_plan_template_names_its_placeholders():
     text = PLAN.read_text(encoding="utf-8")
-    for placeholder in ("{SPRINT_DOC_PATH}", "{OUTPUT_PATH}", "{REPO_ROOT}", "{EXEMPLAR_PLAN}"):
+    for placeholder in (
+        "{SPRINT_DOC_PATH}", "{OUTPUT_PATH}", "{REPO_ROOT}", "{EXEMPLAR_PLAN}",
+        "{STORY_ID_PREFIX}",
+    ):
         assert placeholder in text, placeholder
 
 
@@ -112,7 +115,7 @@ def test_plan_template_pre_answers_the_execution_handoff_and_stops():
 
 def test_plan_template_states_the_join_key_and_the_citation_rule():
     text = PLAN.read_text(encoding="utf-8")
-    assert "(SK-0xx)" in text and "(process)" in text  # the heading grammar SK-033 validates
+    assert "({STORY_ID_PREFIX}-0xx)" in text and "(process)" in text  # the heading grammar SK-033 validates
     assert "exists today" in text  # cite lines only for code that exists today
 
 
@@ -183,3 +186,10 @@ def test_plan_template_carves_out_tooling_findings_from_the_repo_root_citation_r
     text = PLAN.read_text(encoding="utf-8")
     assert "supskill's own tooling or mechanism" in text
     assert "reproduced symptom" in text
+
+
+def test_no_reference_template_hardcodes_the_sk_prefix_example():
+    # SK-101: the SK-0xx literal is what anchored the playset PLS run onto SK.
+    # scope/plan carry {STORY_ID_PREFIX}; replan-shapes is prefix-neutral.
+    for reference in (SCOPE, PLAN, REFERENCES / "replan-shapes.md"):
+        assert "SK-0xx" not in reference.read_text(encoding="utf-8"), reference.name

@@ -147,7 +147,7 @@ def test_shape_1_matches_the_existing_backlog_row_format_and_only_appends():
 
 def test_shape_2_uses_the_task_status_verb_that_already_exists():
     text = (REFERENCES / "replan-shapes.md").read_text(encoding="utf-8")
-    assert '`task --id <SK-0xx> --status PARKED --note' in text
+    assert '`task --id <story-id> --status PARKED --note' in text
     assert "not** advanced past" in text.lower() or "not advanced past" in text.lower()
 
 
