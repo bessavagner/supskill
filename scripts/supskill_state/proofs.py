@@ -58,7 +58,11 @@ class ProofLine:
 
 
 def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
-    """Every proof line, in document order; raises StateError listing every violation."""
+    """Every proof line, in document order.
+
+    Raises StateError listing every grammar violation, or on a story-id prefix
+    mismatch (a Stories section whose story ids don't match story_prefix).
+    """
     story_re = _story_pattern(story_prefix)
     proofs: list[ProofLine] = []
     violations: list[str] = []
@@ -106,13 +110,20 @@ def parse_proof_lines(text: str, story_prefix: str = "SK") -> list[ProofLine]:
         seen.add(story)
         proofs.append(ProofLine(story=story, seam=seam, impact=impact, provable=provable))
 
+    # Partial contamination (a Stories section mixing the configured prefix with a
+    # foreign one) is intentionally NOT refused here - `required` is non-empty in
+    # that case, so the foreign heading is skipped silently. The narrow rule below
+    # targets a wholly-mismatched doc; surfacing mixed foreign headings is a
+    # separate, deliberately-deferred concern.
     if not required and foreign_ids:
         prefixes = sorted({fid.rsplit("-", 1)[0] for fid in foreign_ids})
         suggestion = "/".join(prefixes)
+        example = foreign_ids[0]
+        example_prefix = example.rsplit("-", 1)[0]
         raise StateError(
             f"story-id prefix mismatch: the Stories section uses {suggestion} "
-            f"(e.g. {foreign_ids[0]}) but the configured prefix is {story_prefix}; "
-            f"run: supskill config --story-id-prefix {prefixes[0]}"
+            f"(e.g. {example}) but the configured prefix is {story_prefix}; "
+            f"run: supskill config --story-id-prefix {example_prefix}"
         )
 
     for story_id in required:
