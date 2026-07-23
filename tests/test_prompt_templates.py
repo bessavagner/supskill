@@ -8,11 +8,14 @@ from pathlib import Path
 
 REFERENCES = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "references"
 SCOPE = REFERENCES / "scope-prompt.md"
-REFINE = REFERENCES / "refine-prompt.md"
 PLAN = REFERENCES / "plan-prompt.md"
 REVIEW = REFERENCES / "review-prompt.md"
 
-TEMPLATES = (SCOPE, REFINE, PLAN, REVIEW)
+# SK-100 collapsed SCOPE and REFINE into one dispatch. refine-prompt.md is gone;
+# the SCOPE template now both scopes from the backlog and refines against live
+# source, so REFINE's contract (citations, the proof grammar, the DoR-findings
+# section) lives here and is asserted against SCOPE below.
+TEMPLATES = (SCOPE, PLAN, REVIEW)
 EXECUTION_SUB_SKILLS = ("subagent-driven-development", "executing-plans")
 
 # Every dispatch's deliverable is a file at a conductor-chosen path, never the
@@ -22,7 +25,6 @@ EXECUTION_SUB_SKILLS = ("subagent-driven-development", "executing-plans")
 # file to fall back on. The path placeholder each template must carry:
 DELIVERABLE_PATH = {
     SCOPE: "{OUTPUT_PATH}",
-    REFINE: "{SPRINT_DOC_PATH}",
     PLAN: "{OUTPUT_PATH}",
     REVIEW: "{FINDINGS_PATH}",
 }
@@ -30,7 +32,10 @@ DELIVERABLE_PATH = {
 
 def test_scope_template_names_its_placeholders():
     text = SCOPE.read_text(encoding="utf-8")
-    for placeholder in ("{SPRINT_ID}", "{BACKLOG_PATH}", "{OUTPUT_PATH}", "{EXEMPLAR_DOCS}"):
+    for placeholder in (
+        "{SPRINT_ID}", "{BACKLOG_PATH}", "{OUTPUT_PATH}", "{REPO_ROOT}",
+        "{EXEMPLAR_DOCS}", "{AUDIT_FAILURES}",
+    ):
         assert placeholder in text, placeholder
 
 
@@ -38,6 +43,35 @@ def test_scope_template_states_the_two_constraints():
     text = SCOPE.read_text(encoding="utf-8")
     assert "cannot ask anyone anything" in text  # D4 / invariant 2
     assert "must not run `supskill-state`" in text  # invariant 3, third surface
+
+
+def test_scope_template_absorbed_refine_the_contract_and_grammar():
+    # SK-100: the merged stage carries what REFINE used to. The proof grammar is
+    # pinned to proofs.py's single-authority constant; the field-list contract
+    # and the in-place re-dispatch rule are both present.
+    from supskill_state.proofs import GRAMMAR_LINE
+
+    text = SCOPE.read_text(encoding="utf-8")
+    assert GRAMMAR_LINE in text
+    assert "DoR findings (refined at pull time)" in text
+    assert "in place" in text
+    assert "live source" in text.lower()
+
+
+def test_scope_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():
+    text = SCOPE.read_text(encoding="utf-8")
+    assert "supskill's own tooling or mechanism" in text
+    assert "reproduced symptom" in text
+
+
+def test_scope_template_dispatches_no_sprint_plan_and_invents_no_capacity():
+    # SK-100: the pm-execution:sprint-plan dispatch and the fabricated capacity
+    # model are both removed. Story selection is the backlog's job; there is no
+    # velocity to plan against, so no capacity number is invented.
+    text = SCOPE.read_text(encoding="utf-8")
+    assert "sprint-plan" not in text
+    assert "committable" not in text
+    assert "working capacity" not in text
 
 
 def test_no_dispatch_template_line_instructs_running_the_state_cli():
@@ -80,31 +114,6 @@ def test_plan_template_states_the_join_key_and_the_citation_rule():
     text = PLAN.read_text(encoding="utf-8")
     assert "(SK-0xx)" in text and "(process)" in text  # the heading grammar SK-033 validates
     assert "exists today" in text  # cite lines only for code that exists today
-
-
-def test_refine_template_names_its_placeholders():
-    text = REFINE.read_text(encoding="utf-8")
-    for placeholder in (
-        "{SPRINT_DOC_PATH}", "{BACKLOG_PATH}", "{REPO_ROOT}", "{EXEMPLAR_DOC}", "{AUDIT_FAILURES}",
-    ):
-        assert placeholder in text, placeholder
-
-
-def test_refine_template_quotes_the_grammar_verbatim():
-    # grammar-drift risk from the sprint risks table: proofs.py is the single
-    # authority; the quote in the prompt is pinned to the parser's own constant
-    from supskill_state.proofs import GRAMMAR_LINE
-
-    assert GRAMMAR_LINE in REFINE.read_text(encoding="utf-8")
-
-
-def test_refine_template_states_the_two_constraints_and_the_field_list():
-    text = REFINE.read_text(encoding="utf-8")
-    assert "cannot ask anyone anything" in text
-    assert "must not run `supskill-state`" in text
-    # the spec-shaped definition appears as a concrete field list, not as the word "spec-shaped"
-    assert "DoR findings (refined at pull time)" in text
-    assert "in place" in text
 
 
 def test_review_template_names_its_placeholders():
@@ -168,12 +177,6 @@ def test_review_template_writes_its_findings_to_the_file_the_conductor_reads():
     assert "{FINDINGS_PATH}" in text
     assert "one finding per line" in text  # the on-disk format, unchanged
     assert "final message" not in text.lower()
-
-
-def test_refine_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():
-    text = REFINE.read_text(encoding="utf-8")
-    assert "supskill's own tooling or mechanism" in text
-    assert "reproduced symptom" in text
 
 
 def test_plan_template_carves_out_tooling_findings_from_the_repo_root_citation_rule():

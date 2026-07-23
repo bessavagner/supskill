@@ -25,7 +25,6 @@ SCHEMA_VERSION = 1
 
 class Stage(str, Enum):  # noqa: UP042
     SCOPE = "SCOPE"
-    REFINE = "REFINE"
     PLAN = "PLAN"
     EXECUTE = "EXECUTE"
     REVIEW = "REVIEW"
@@ -33,7 +32,6 @@ class Stage(str, Enum):  # noqa: UP042
 
 STAGE_ORDER: tuple[Stage, ...] = (
     Stage.SCOPE,
-    Stage.REFINE,
     Stage.PLAN,
     Stage.EXECUTE,
     Stage.REVIEW,
@@ -128,6 +126,20 @@ def _parse_stage(value, where: str) -> Stage:
             f"{where}: unknown stage {value!r}; expected one of "
             f"{[s.value for s in Stage]}"
         ) from None
+
+
+# SK-100 collapsed SCOPE and REFINE into one stage. A state.json frozen at the
+# old REFINE stage across the upgrade is remapped to SCOPE on load, so an
+# in-progress sprint resumes instead of failing to parse. Applies to the
+# persisted `stage` field only, never to `entry`: REFINE was never a valid
+# entry, and remapping it there would silently accept an invalid --entry.
+_LEGACY_STAGE_ALIASES = {"REFINE": "SCOPE"}
+
+
+def _parse_persisted_stage(value, where: str) -> Stage:
+    if value in _LEGACY_STAGE_ALIASES:
+        value = _LEGACY_STAGE_ALIASES[value]
+    return _parse_stage(value, where)
 
 
 def parse_task_status(value, where: str) -> TaskStatus:
@@ -235,7 +247,7 @@ def state_from_dict(raw: dict) -> State:
         schema=SCHEMA_VERSION,
         backlog=_opt_str(_require(raw, "backlog", "state"), "state.backlog"),
         sprint=_parse_sprint(_require(raw, "sprint", "state"), "sprint"),
-        stage=_parse_stage(_require(raw, "stage", "state"), "state.stage"),
+        stage=_parse_persisted_stage(_require(raw, "stage", "state"), "state.stage"),
         artifacts=_parse_artifacts(_require(raw, "artifacts", "state"), "artifacts"),
         gates=_parse_gates(_require(raw, "gates", "state"), "gates"),
         tasks=tasks,

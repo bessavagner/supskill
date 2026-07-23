@@ -6,7 +6,7 @@ the operator's one manual move. This module removes that interruption: it
 creates (or reuses) a worktree at `.worktrees/<branch>`, purely additive next
 to the operator's own checkout, and syncs the sprint doc / dev plan into it -
 both are still-uncommitted working-tree files at EXECUTE time (PLAN's
-dispatched agent never commits, and nothing else in SCOPE/REFINE/PLAN runs
+dispatched agent never commits, and nothing else in SCOPE/PLAN runs
 `git commit` either), and a plain `git worktree add` checks out a commit, not
 working-tree state, so it would silently lose them otherwise.
 

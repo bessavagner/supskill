@@ -91,21 +91,23 @@ Copy this checklist into your response and check items off as you go.
 | `stage` | Action |
 |---|---|
 | `SCOPE` | Follow **The SCOPE stage** below. |
-| `REFINE` | Follow **The REFINE stage** below. |
 | `PLAN` | Follow **The PLAN stage** below. |
 | `EXECUTE` | Follow **The EXECUTE stage** below. |
 | `REVIEW` | Follow **The REVIEW stage** below. |
 
 ## The SCOPE stage
 
-The stage pattern (E4–E6 copy this shape): dispatch a fresh-context subagent
-from a template, verify its artifact mechanically, record it via
-`supskill-state`, advance, fall through.
+One stage scopes the sprint from the backlog **and** refines it against live
+source, in a single dispatch — there is no separate REFINE stage (SK-100
+collapsed the two: SCOPE's output was never gated on its own, so it produced an
+ungated intermediate REFINE rewrote anyway). The stage pattern the later stages
+copy: dispatch a fresh-context subagent from a template, verify its artifact
+mechanically, audit it, record it via `supskill-state`, then Gate 1.
 
 1. **Resume idempotence.** If `artifacts.sprint_doc` is recorded AND the file
-   exists, SCOPE already ran — a crash between `artifact` and `advance` must
-   not re-spend a run. Run `advance --to REFINE` and continue at the REFINE
-   stage.
+   exists, the scope-and-refine pass already ran — do not re-dispatch (a crash
+   between the dispatch and `artifact` leaves no recorded artifact, so this
+   check only skips a genuinely finished pass). Continue at step 6 (audit).
 2. **Check the backlog.** If `backlog` is null (a pre-S3 state file; `init`
    now refuses to create this), report that a SCOPE sprint without a backlog
    has nothing to scope, name
@@ -118,44 +120,27 @@ from a template, verify its artifact mechanically, record it via
    Example: backlog `docs/plans/sprints/backlog-01/backlog.md`, sprint `s4`,
    slug `plan-gate2` → `docs/plans/sprints/backlog-01/sprint-s4-plan-gate2.md`.
 4. **Fill the template** [references/scope-prompt.md](references/scope-prompt.md)
-   — every `{PLACEHOLDER}` it names. `{EXEMPLAR_DOCS}` is up to two existing
-   `sprint-*.md` files in the backlog's directory (never the output path
-   itself); if none exist, fill it with `none`.
+   — every `{PLACEHOLDER}` it names. `{REPO_ROOT}` is the repo root the
+   conductor runs from; `{EXEMPLAR_DOCS}` is up to two existing `sprint-*.md`
+   files in the backlog's directory (never the output path itself), or `none`;
+   `{AUDIT_FAILURES}` is `none` on the first dispatch.
 5. **Dispatch** one general-purpose subagent whose entire prompt is the filled
-   template, then `cost --stage SCOPE`.
+   template, then `cost --stage SCOPE --label refine`.
 6. **Verify mechanically.** The file must now exist at the derived output
    path. If it does not, report the agent's returned output verbatim and stop
    — no blocker verb is available before tasks exist, and the operator is one
-   gate away.
-7. **Record and advance.** Run
-   `artifact --set sprint_doc --path <output path>`, then
-   `advance --to REFINE`, then continue at the REFINE stage.
-
-## The REFINE stage
-
-Re-invoked at stage REFINE, always re-dispatch on the doc's current content.
-Worst case an already-refined doc is refined again — acceptable, because
-Gate 1 still guards the result. Detecting "already refined" would mean parsing
-prose for state, which is exactly the coupling the resume contract refuses.
-
-1. **Locate the doc:** `artifacts.sprint_doc` from `show --json`. If the file
-   is missing from disk, report that and stop.
-2. **Fill the template**
-   [references/refine-prompt.md](references/refine-prompt.md):
-   `{SPRINT_DOC_PATH}`, `{BACKLOG_PATH}`, `{REPO_ROOT}` (the repo root the
-   conductor runs from), `{EXEMPLAR_DOC}` (an existing refined sprint doc in
-   the backlog's directory, or `none`), `{AUDIT_FAILURES}` = `none`. Dispatch one general-purpose subagent with the filled template, then `cost --stage REFINE --label refine`.
-3. **Audit mechanically.** From the repo root, run:
+   gate away. Then record it: `artifact --set sprint_doc --path <output path>`.
+7. **Audit mechanically.** From the repo root, run:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-audit --proofs <doc path>`
    - Exit 0 → continue at **Gate 1** (next section).
-   - Exit 1 → re-dispatch **once**: the same filled template with `{AUDIT_FAILURES}` set to the audit's failure output, quoted verbatim, then `cost --stage REFINE --label refine-retry`. Run the audit again. A second failure → report the failures verbatim and stop. Never dispatch a third time — there is no retry loop.
+   - Exit 1 → re-dispatch **once**: the same filled template with `{AUDIT_FAILURES}` set to the audit's failure output, quoted verbatim, then `cost --stage SCOPE --label refine-retry`. Run the audit again. A second failure → report the failures verbatim and stop. Never dispatch a third time — there is no retry loop.
 
 ## Gate 1 — the operator reads the refined doc
 
 Ask for real, refuse an empty answer, record verbatim: [references/gate.md](references/gate.md).
 
 4. `approved` → `advance --to PLAN` → continue at **The PLAN stage** (below).
-5. `rejected` → recorded and final for this pass; report it and stop, naming the rework loop: edit the doc or ask for a fresh REFINE pass, then re-invoke and re-gate. Last decision wins in state; every attempt stays in the trail.
+5. `rejected` → recorded and final for this pass; report it and stop, naming the rework loop: edit the doc or ask for a fresh SCOPE pass, then re-invoke and re-gate. Last decision wins in state; every attempt stays in the trail.
 
 ## The PLAN stage
 

@@ -21,7 +21,7 @@ SKILL = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.
 
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 XML_TAG = re.compile(r"<[^>]+>")
-WORKFLOW_TOKENS = re.compile(r"\b(SCOPE|REFINE|PLAN|EXECUTE|REVIEW|G1|G2|G3)\b")
+WORKFLOW_TOKENS = re.compile(r"\b(SCOPE|PLAN|EXECUTE|REVIEW|G1|G2|G3)\b")
 
 
 def read_frontmatter_and_body() -> tuple[dict, list[str]]:

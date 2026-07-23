@@ -170,7 +170,7 @@ def _cmd_tasks(args) -> int:
 def _add_advance(subparsers) -> None:
     sub = subparsers.add_parser("advance", help="advance one stage forward, if preconditions hold")
     sub.add_argument("--to", required=True, dest="to", metavar="STAGE",
-                     help="target stage (must be the next stage in SCOPE-REFINE-PLAN-EXECUTE-REVIEW)")
+                     help="target stage (must be the next stage in SCOPE-PLAN-EXECUTE-REVIEW)")
     sub.set_defaults(func=_cmd_advance)
 
 
@@ -247,7 +247,7 @@ def _add_cost(subparsers) -> None:
     sub = subparsers.add_parser(
         "cost", help="record one subagent dispatch's token usage against the running sprint"
     )
-    sub.add_argument("--stage", required=True, help="SCOPE | REFINE | PLAN | EXECUTE | REVIEW")
+    sub.add_argument("--stage", required=True, help="SCOPE | PLAN | EXECUTE | REVIEW")
     sub.add_argument(
         "--label",
         help="which dispatch within the stage, e.g. implementer|task-reviewer|fix|reviewer-a",

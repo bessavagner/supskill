@@ -24,7 +24,7 @@ def test_load_missing_file_refuses_with_a_clear_message(tmp_path):
 
 def test_dump_then_load_round_trips(tmp_path, make_state):
     path = state_path(tmp_path)
-    state = make_state(stage=Stage.REFINE)
+    state = make_state(stage=Stage.PLAN)
     dump_state(state, path)
     assert load_state(path) == state
 
@@ -48,7 +48,7 @@ def test_interrupted_write_leaves_previous_state_intact(tmp_path, make_state, mo
 
     monkeypatch.setattr(store.os, "replace", crash)
     with pytest.raises(RuntimeError):
-        dump_state(make_state(stage=Stage.REFINE), path)
+        dump_state(make_state(stage=Stage.PLAN), path)
     assert path.read_bytes() == before
     # and the crashed write's temp file was cleaned up
     assert [p.name for p in path.parent.iterdir()] == ["state.json"]

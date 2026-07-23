@@ -45,7 +45,6 @@ def test_advance_to_execute_with_g2_null_refuses(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_gate("G1", "approved", "approved", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
-    advance_stage("REFINE", root=tmp_path)
     advance_stage("PLAN", root=tmp_path)
 
     message = _refused(tmp_path, "EXECUTE", "G2_plan")
@@ -57,12 +56,13 @@ def test_advance_to_execute_with_g2_null_refuses(tmp_path):
 
 def test_skipping_a_stage_is_impossible_regardless_of_gate_state(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
-    # even with every gate approved and artifacts present, SCOPE -> PLAN is not expressible
+    # even with every gate approved and artifacts present, you cannot skip ahead:
+    # since SK-100 collapsed SCOPE and REFINE, SCOPE's one legal step is PLAN, and
+    # EXECUTE and REVIEW remain unreachable in a single hop.
     record_gate("G1", "approved", "x", root=tmp_path)
     record_gate("G2", "approved", "x", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     record_artifact("dev_plan", _write_doc(tmp_path, "plan.md"), root=tmp_path)
-    _refused(tmp_path, "PLAN", "one-step-forward")
     _refused(tmp_path, "EXECUTE", "one-step-forward")
     _refused(tmp_path, "REVIEW", "one-step-forward")
 
@@ -88,30 +88,30 @@ def test_unknown_target_stage_refused(tmp_path):
 # --- the three preconditions, each way ---
 
 
-def test_advance_to_refine_requires_a_recorded_existing_sprint_doc(tmp_path):
-    # no gate guards SCOPE -> REFINE; the recorded doc does. Entry=PLAN/EXECUTE sprints
-    # never take this transition, so the precondition cannot reach them (D2).
+def test_advance_to_plan_requires_a_recorded_existing_sprint_doc(tmp_path):
+    # SK-100 collapsed SCOPE and REFINE: the recorded-doc precondition that used to
+    # guard SCOPE -> REFINE now guards SCOPE -> PLAN, alongside G1. With G1 approved,
+    # the doc is the only remaining blocker, so its absence is named on its own.
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
-    message = _refused(tmp_path, "REFINE", "sprint_doc is not recorded")
-    assert "G1" not in message  # a doc-less REFINE is an artifact problem, not a gate problem
+    record_gate("G1", "approved", "approved", root=tmp_path)
+    _refused(tmp_path, "PLAN", "sprint_doc is not recorded")
 
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
     (tmp_path / "doc.md").unlink()
-    _refused(tmp_path, "REFINE", "missing file")
+    _refused(tmp_path, "PLAN", "missing file")
 
     _write_doc(tmp_path, "doc.md")
-    assert advance_stage("REFINE", root=tmp_path).stage is Stage.REFINE
+    assert advance_stage("PLAN", root=tmp_path).stage is Stage.PLAN
 
 
 def test_advance_to_plan_requires_g1_on_top_of_the_doc(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
-    advance_stage("REFINE", root=tmp_path)
 
     _refused(tmp_path, "PLAN", "G1_sprint_doc")  # the doc is recorded; the gate alone refuses
 
     record_gate("G1", "approved", "approved", root=tmp_path)
-    (tmp_path / "doc.md").unlink()  # a doc that vanished after REFINE is re-caught at -> PLAN
+    (tmp_path / "doc.md").unlink()  # a doc that vanished after the gate is re-caught at -> PLAN
     _refused(tmp_path, "PLAN", "missing file")
 
     _write_doc(tmp_path, "doc.md")
@@ -121,7 +121,6 @@ def test_advance_to_plan_requires_g1_on_top_of_the_doc(tmp_path):
 def test_a_rejected_gate_is_not_approved(tmp_path):
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
     record_artifact("sprint_doc", _write_doc(tmp_path, "doc.md"), root=tmp_path)
-    advance_stage("REFINE", root=tmp_path)
     record_gate("G1", "rejected", "no - redo the scope section", root=tmp_path)
     message = _refused(tmp_path, "PLAN", "G1_sprint_doc")
     assert "rejected" in message
@@ -181,8 +180,6 @@ def test_entry_scope_can_never_reach_execute_without_both_gates(tmp_path):
     _set_tasks(tmp_path, TaskStatus.PENDING)
 
     _refused(tmp_path, "EXECUTE", "one-step-forward")  # from SCOPE
-    advance_stage("REFINE", root=tmp_path)
-    _refused(tmp_path, "EXECUTE", "one-step-forward")  # from REFINE
     _refused(tmp_path, "PLAN", "G1_sprint_doc")  # G1 not approved
 
     record_gate("G1", "approved", "x", root=tmp_path)

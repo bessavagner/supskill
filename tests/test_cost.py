@@ -103,14 +103,14 @@ def test_cli_records_with_the_right_exit_code(tmp_path, monkeypatch, capsys):
     assert (
         main(
             [
-                "cost", "--stage", "REFINE", "--label", "refine-agent",
+                "cost", "--stage", "SCOPE", "--label", "refine-agent",
                 "--tokens", "12345", "--tool-uses", "7", "--duration-ms", "9000",
             ]
         )
         == 0
     )
-    assert "recorded cost: REFINE/refine-agent tokens=12345" in capsys.readouterr().out
-    assert _costs(tmp_path)[0]["stage"] == "REFINE"
+    assert "recorded cost: SCOPE/refine-agent tokens=12345" in capsys.readouterr().out
+    assert _costs(tmp_path)[0]["stage"] == "SCOPE"
 
     assert main(["cost", "--stage", "BOGUS", "--tokens", "1"]) == 1
     assert "unknown stage" in capsys.readouterr().err

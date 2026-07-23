@@ -71,7 +71,6 @@ SKILL_NAMESPACE = re.compile(r"\b([a-z0-9-]+):([a-z0-9-]+)\b")
 # Skills the conductor dispatches, and the plugin that ships each.
 DISPATCHED_SKILL_PLUGINS = {
     "superpowers": "superpowers",
-    "pm-execution": "pm-execution",
 }
 
 

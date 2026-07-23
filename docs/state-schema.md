@@ -35,7 +35,7 @@ files (invariant 3). Layout:
 - `sprint.scratch` (string): **derived** from the id, never typed:
   `.superpowers/sdd/<normalized-id>/` where normalization is lowercase and only
   `[a-z0-9-]` is accepted (anything else refuses; D8).
-- `stage` (string): `SCOPE | REFINE | PLAN | EXECUTE | REVIEW`. Sprint
+- `stage` (string): `SCOPE | PLAN | EXECUTE | REVIEW`. Sprint
   completion is a **G3 decision, not a sixth stage**.
 - `artifacts`: exactly `sprint_doc` and `dev_plan`, each a path or null.
 - `gates`: exactly `G1_sprint_doc`, `G2_plan`, `G3_review`; each
@@ -78,7 +78,7 @@ the audit trail's job is to make a fabricated approval readable, F-4), and
 ## Costs
 
 `costs.jsonl` records `{stage, label, tokens, tool_uses, duration_ms, at}` per
-subagent dispatch, where `stage` is one of `SCOPE | REFINE | PLAN | EXECUTE |
+subagent dispatch, where `stage` is one of `SCOPE | PLAN | EXECUTE |
 REVIEW`, `label` is a free-text name for the dispatch within that stage (e.g.
 `implementer`, `task-reviewer`, `fix`, `reviewer-a`) or `null` when the stage
 dispatches only one agent, `tokens` is that dispatch's reported
