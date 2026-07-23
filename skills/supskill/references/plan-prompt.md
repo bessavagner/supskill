@@ -43,7 +43,7 @@ Your task:
    overrides `writing-plans`' own dated-path default; the conductor supplies the
    path because the date is not derivable from a plan it has not read yet.
 2. **Every task heading names the story it serves:**
-   `### Task N: <what> (SK-0xx)` — or the literal `### Task N: <what> (process)`
+   `### Task N: <what> ({STORY_ID_PREFIX}-0xx)` — or the literal `### Task N: <what> (process)`
    for a task that serves no backlog story (a demo checklist, a docs-only
    delta). This is a join key, not a decoration: a script checks that every
    story in the sprint doc is named by at least one task heading and that every

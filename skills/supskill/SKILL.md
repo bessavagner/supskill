@@ -123,7 +123,9 @@ mechanically, audit it, record it via `supskill-state`, then Gate 1.
    — every `{PLACEHOLDER}` it names. `{REPO_ROOT}` is the repo root the
    conductor runs from; `{EXEMPLAR_DOCS}` is up to two existing `sprint-*.md`
    files in the backlog's directory (never the output path itself), or `none`;
-   `{AUDIT_FAILURES}` is `none` on the first dispatch.
+   `{AUDIT_FAILURES}` is `none` on the first dispatch. `{STORY_ID_PREFIX}` is
+   this project's configured story-id prefix: read it once with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state config --get` and fill it verbatim.
 5. **Dispatch** one general-purpose subagent whose entire prompt is the filled
    template, then `cost --stage SCOPE --label refine`.
 6. **Verify mechanically.** The file must now exist at the derived output
@@ -177,7 +179,8 @@ question tool auto-resolves empty. The template pre-answers that (layer 1). Step
 5. **Fill the template**
    [references/plan-prompt.md](references/plan-prompt.md) — `{SPRINT_DOC_PATH}`,
    `{OUTPUT_PATH}`, `{REPO_ROOT}`, `{EXEMPLAR_PLAN}` (an existing plan under
-   `docs/superpowers/plans/`, or `none`) — dispatch one general-purpose
+   `docs/superpowers/plans/`, or `none`), and `{STORY_ID_PREFIX}` (read once with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state config --get`) — dispatch one general-purpose
    subagent whose entire prompt is the filled template, then `cost --stage PLAN`.
 6. **The HEAD guard.** Run `git rev-parse HEAD` again, then:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state plan-guard --before <before> --after <after>`
