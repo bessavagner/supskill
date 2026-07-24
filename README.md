@@ -122,7 +122,7 @@ Requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
 git clone https://github.com/bessavagner/supskill.git
 cd supskill
 uv sync
-uv run pytest -q          # 314 passing, offline, <1s
+uv run pytest -q          # 431 passing, offline, <2s
 ```
 
 Install as a Claude Code plugin:
@@ -131,6 +131,8 @@ Install as a Claude Code plugin:
 claude plugin marketplace add bessavagner/supskill
 claude plugin install supskill@supskill
 ```
+
+Operating it afterwards — cutting a release, updating an installed plugin, checking which version is actually running — is in [`docs/runbook.md`](docs/runbook.md).
 
 supskill **composes** skills that ship in other plugins rather than reimplementing them (invariant 1), so it declares them as dependencies and Claude Code resolves them for you at install time:
 
