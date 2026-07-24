@@ -139,3 +139,56 @@ def test_cli_config_rejects_an_invalid_prefix(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["config", "--story-id-prefix", "blk"]) == 1
     assert "story-id-prefix" in capsys.readouterr().err
+
+
+# --- SK-115: archiving a sprint that never recorded its Gate 3 decision ---
+
+def _at_review_with_g3(tmp_path, decision):
+    """A sprint resting at REVIEW, with G3 either recorded or still open."""
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.stage = Stage.REVIEW
+    state.gates["G3_review"] = decision
+    from supskill_state.store import dump_state
+
+    dump_state(state, state_path(tmp_path))
+
+
+def test_archive_refuses_over_a_review_sprint_with_no_gate_three_decision(tmp_path):
+    _at_review_with_g3(tmp_path, None)
+    before = state_path(tmp_path).read_bytes()
+    with pytest.raises(StateError, match="no Gate 3 decision") as excinfo:
+        init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    message = str(excinfo.value)
+    assert "s5" in message
+    assert "gate --id G3" in message  # names the verb that records the answer
+    assert state_path(tmp_path).read_bytes() == before  # nothing archived, nothing created
+    assert not (runs_dir(tmp_path) / "s5" / "archive-1").exists()
+
+
+@pytest.mark.parametrize("decision", ["approved", "rejected", "replan"])
+def test_archive_proceeds_once_any_gate_three_decision_is_recorded(tmp_path, decision):
+    _at_review_with_g3(tmp_path, decision)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert state.sprint.id == "s6"
+    assert (runs_dir(tmp_path) / "s5" / "archive-1" / "state.json").exists()
+
+
+@pytest.mark.parametrize("stage", [Stage.SCOPE, Stage.PLAN, Stage.EXECUTE])
+def test_archive_is_untouched_for_a_sprint_that_never_reached_review(tmp_path, stage):
+    # the row is about REVIEW specifically: an earlier stage has no G3 to record
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.stage = stage
+    from supskill_state.store import dump_state
+
+    dump_state(state, state_path(tmp_path))
+    assert init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path).sprint.id == "s6"
+
+
+def test_an_unreadable_old_state_is_still_archived_never_refused(tmp_path):
+    # SK-115 must not turn "never destroy prior state" into "never archive it"
+    supskill_dir(tmp_path).mkdir(parents=True)
+    state_path(tmp_path).write_text("{corrupted")
+    init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_text() == "{corrupted"
