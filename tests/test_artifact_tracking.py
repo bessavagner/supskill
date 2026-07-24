@@ -130,3 +130,12 @@ def test_cli_refuses_when_there_is_no_state_to_read(tmp_path, monkeypatch, capsy
     monkeypatch.chdir(tmp_path)
     assert main(["artifact-guard"]) == 1
     assert "no state file" in capsys.readouterr().err
+
+
+def test_gate_three_prose_names_the_artifact_guard():
+    skill = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    start = text.index("## Gate 3")
+    section = text[start : text.index("\n## ", start + 1)]
+    assert "artifact-guard" in section
+    assert "commit" in section  # the operator's move, named

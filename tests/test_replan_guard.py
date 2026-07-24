@@ -162,3 +162,11 @@ def test_cli_reads_state_from_an_explicit_dir(tmp_path, capsys):
     commands.init_sprint("s6", entry="EXECUTE", root=tmp_path)
     assert main(["replan-guard", "--shape", "park-at-boundary", "--dir", str(tmp_path)]) == 1
     assert "s6" in capsys.readouterr().err
+
+
+def test_gate_three_prose_names_what_the_replan_guard_now_checks():
+    skill = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    start = text.index("### Refusing a north-star supersede")
+    section = text[start : text.index("\n## ", start + 1)]
+    assert "backlog" in section and "amend" in section
