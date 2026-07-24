@@ -6,7 +6,17 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, commit_scope, config, plan_guard, preflight, replan_guard, store, worktree
+from . import (
+    artifact_tracking,
+    commands,
+    commit_scope,
+    config,
+    plan_guard,
+    preflight,
+    replan_guard,
+    store,
+    worktree,
+)
 from .errors import StateError
 
 
@@ -30,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_plan_guard(subparsers)
     _add_commit_scope_guard(subparsers)
     _add_replan_guard(subparsers)
+    _add_artifact_guard(subparsers)
     _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
@@ -259,6 +270,36 @@ def _cmd_replan_guard(args) -> int:
         print(replan_guard.target_refusal(args.shape, state.sprint.id), file=sys.stderr)
         return 1
     print(f"replan-guard: {args.shape} is an amending shape; it amends {state.backlog}")
+    return 0
+
+
+def _add_artifact_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "artifact-guard",
+        help="are this sprint's recorded artifacts tracked by git? exit 1 means refuse",
+    )
+    sub.add_argument(
+        "--dir",
+        default=None,
+        dest="root",
+        help="the repo root whose .supskill/ holds this sprint's state; default cwd",
+    )
+    sub.set_defaults(func=_cmd_artifact_guard)
+
+
+def _cmd_artifact_guard(args) -> int:
+    root = store.resolve_root(Path(args.root) if args.root else None)
+    state = store.load_state(store.state_path(root))
+    recorded = [path for path in state.artifacts.values() if path]
+    if not recorded:
+        print("artifact-guard: no artifacts recorded; there is nothing to check")
+        return 0
+    tracked = artifact_tracking.git_tracked(str(root), recorded)
+    missing = artifact_tracking.untracked(recorded, tracked)
+    if missing:
+        print(artifact_tracking.refusal(missing), file=sys.stderr)
+        return 1
+    print(f"artifact-guard: all {len(recorded)} recorded artifacts are tracked by git")
     return 0
 
 
