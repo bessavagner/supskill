@@ -69,14 +69,15 @@ Copy this checklist into your response and check items off as you go.
 3. **Compare ids.** Lowercase both the requested sprint id and `sprint.id`
    from the JSON.
    - Equal → this is a resume. Mutate nothing; continue at step 4.
-   - Different → refuse and stop. The refusal must name both ids and the
-     operator's way forward, verbatim:
+   - Different → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
 
          A different sprint is already on disk: state.json holds <sprint.id>,
          you asked for <requested-id>. A half-finished sprint is never
-         archived automatically. If you mean to close it out and start fresh,
-         run: ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive
+         archived automatically. If you mean to close it out and start fresh, run:
+         ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--backlog/--branch/--slug flag from this invocation, verbatim>
 
+     Never drop a flag the operator typed: an init that loses `--backlog` starts
+     a sprint with `backlog: null`, which `replan-guard` refuses at Gate 3.
      Do not run that command. Stop here.
 4. **Report the resume surface.** From the same `show --json` output, report:
    the sprint id and slug, current `stage`, `sprint.entry`, each gate's

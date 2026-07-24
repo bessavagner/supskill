@@ -7,6 +7,7 @@ name --archive - the conductor inherits the refusal, never the flag.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -65,3 +66,18 @@ def test_cell_mismatch_init_refuses_and_names_archive_without_using_it(tmp_path,
     err = capsys.readouterr().err
     assert "refused" in err and "--archive" in err
     assert state_path(tmp_path).read_bytes() == before  # nothing archived, nothing clobbered
+
+
+def test_the_step_three_refusal_carries_the_operators_own_flags_forward():
+    # SK-114/SK-118: the template dropped --backlog/--branch/--slug from the command
+    # it tells the operator to run, producing the backlog: null sprint replan-guard
+    # now refuses at Gate 3. The conductor re-added them by judgment; prose must not
+    # need that.
+    skill = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    start = text.index("3. **Compare ids.**")
+    section = text[start : text.index("\n4. **", start)]
+    assert "--archive" in section
+    assert "--backlog" in section
+    assert "the flags you gave this invocation" in section
+    assert "Do not run that command." in section  # the restraint survives the edit
