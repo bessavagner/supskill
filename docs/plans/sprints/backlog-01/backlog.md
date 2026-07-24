@@ -70,7 +70,7 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 136 pts for v1 (E1–E8, all shipped), plus 42 pts of E9 post-validation findings.**
+**Total: 136 pts for v1 (E1–E8, all shipped), plus 49 pts of E9 post-validation findings.**
 Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure. E9 is the exception's proof: the E8 runs turned the
@@ -177,11 +177,12 @@ supskill itself, three of which no fixture repo could have produced — see
 
 ---
 
-## E9 — Findings from the E8 validation runs (42 pts)
+## E9 — Findings from real runs (49 pts)
 
-Written back from the E8 reports (`validation/reports/`, gitignored) so the punch
-list they produced lives in git rather than in point-in-time run records. Every row cites
-the run that surfaced it. These are defects and design gaps in shipped v1 code, not new
+Written back from the E8 reports (`validation/reports/`, gitignored) and, from SK-114 on,
+mined from the on-disk `.supskill/runs/` trails of projects that adopted supskill after E8
+closed — so the punch list they produce lives in git rather than in point-in-time run
+records. Every row cites the run that surfaced it. These are defects and design gaps in shipped v1 code, not new
 capability — E9 is the same principle E8 proved, turned on supskill itself: what a real run
 finds is scheduled, not remembered.
 
@@ -208,12 +209,18 @@ stage that failed in s1. This row exists so the fix is not re-litigated; it need
 | SK-111 | `supskill-state` refuses when run from a worktree cwd during EXECUTE. With EXECUTE isolated into `.worktrees/<id>`, the conductor ran `supskill-state cost` from the worktree cwd and was refused three times (`no state file at …/.worktrees/s5/.supskill/state.json`), recovering by `cd`-ing to the repo root each time. `store.state_path` resolves `.supskill/` from cwd with **no** upward search (`store.py:24-30`, by design), so the refusal is correct but the friction is systemic whenever the dispatch root ≠ the state root. Either make the worktree notes require every state call to `cd` to the original repo root first, or have `supskill-state` resolve `.supskill/` from the main worktree's root when cwd is a registered linked worktree. (playset s5.) | 2 | M | ☐ |
 | SK-112 | The EXECUTE task-reviewer's findings arrive as a placeholder reply. SDD's task-reviewer prompt, composed verbatim by EXECUTE, returns its findings as its final chat message; on s5 that collapsed to `Done.`/`.` on both task reviews, and the conductor had to resume the agent and persist to a file to recover them. supskill already closed this for its **own** dispatches (`7dfb0f9`: `references/review-prompt.md`'s `FINDINGS_PATH`, "read it back … nothing parses your reply"), but EXECUTE inherits SDD's prompt, which has no file handoff. Wrap the EXECUTE task-review dispatch so the reviewer writes findings to `<scratch>/review-findings-<N>.md` and returns only a status line — supskill owns the dispatch wrapper even though the prompt body is SDD's. (playset s5.) | 3 | M | ☐ |
 | SK-113 | The halt prose misleads on what "non-terminal" means at `advance --to REVIEW`. On s5 the conductor expected the advance to refuse with an open blocker, then rationalized when it succeeded. The behavior is correct — `TERMINAL_STATUSES` includes `BLOCKED` and `PARKED` (`transitions.py:37-45`), so a blocked sprint advances to REVIEW carrying the blocker to Gate 3 — but the SKILL.md halt prose reads as though any open blocker blocks the advance. One line naming `BLOCKED`/`PARKED` as terminal resting states that reach REVIEW removes the stumble. (playset s5.) | 1 | C | ☐ |
+| SK-114 | **A non-SCOPE-entry sprint reaches Gate 3 with no writeback target.** `init` requires `--backlog` only when the entry stage is SCOPE (`commands.py:60`), so an `--entry EXECUTE` sprint is legally created with `backlog: null` — and nothing downstream re-checks it. ledgerus s6 is sitting at `REVIEW` right now in exactly that state. But Gate 3's Shape 1 appends rows to `backlog.md` (`replan-shapes.md`), and "Propose the next sprint, then stop" (`SKILL.md:499-501`) must name the first unchecked epic in the backlog's build order; both are unreachable from null, and Shape 1 is what ledgerus's G3 resolved to on **both** of its gated sprints (s3, s4). The backlog is a REVIEW-stage dependency, not a SCOPE-stage one, so the entry-conditional check is guarding the wrong stage: either require a backlog at every entry mode, or have Gate 3 refuse before opening a writeback it has no target for. (ledgerus s6 — the first EXECUTE-entry sprint on record.) | 3 | M | ☐ |
+| SK-115 | **Abandoning a sprint at REVIEW discards the decision that mattered most.** ledgerus s5 halted correctly — SK-052 blocked on a genuine `AGENTS.md` self-contradiction, SK-053/054/055 parked as downstream of that one root cause, all four terminal, advanced to REVIEW. The operator then resolved the contradiction out of band and re-inited s6 at `--entry EXECUTE`. `runs/s5/archive-1/gates.jsonl` holds G1 and G2 and no G3, so **how** that blocker was decided exists nowhere on disk: the trail preserves the question and loses the answer. This is the append-only audit trail failing at the one point it was built for. Distinct from SK-103 (a settled blocker still reading as open); here no decision is ever recorded at all. `init --archive` over a sprint resting at REVIEW with `G3_review: null` should refuse, or record an explicit superseded/abandoned decision naming the sprint that took over. (ledgerus s5→s6.) | 2 | M | ☐ |
+| SK-116 | An EXECUTE-entry continuation silently inherits the previous sprint's artifact pointers. ledgerus s6 carries `sprint.id: s6` with `artifacts.sprint_doc: docs/sprints/backlog-01/sprint-s5.md`, `dev_plan: …/2026-07-23-sprint-s5.md`, and `branch: s5` — it ran no SCOPE and no PLAN, then spent 2.78M tokens (the largest EXECUTE on record across both validation targets) against a plan written for a different sprint id. The run was correct and the resumption path did its job; the defect is that state cannot distinguish "s6 continues s5" from "s6 has its own doc that happens to be misnamed", so the cost ledger and the artifact pointers disagree about which sprint they describe. Record the continuation explicitly — a `continues` field set by `init --entry EXECUTE`, or carry the source sprint id forward — so the trail says what the sprint actually was. (ledgerus s6.) | 2 | C | ☐ |
 
 **Sequencing.** SK-100 is the anchor and is planned first — it is a design change the rest
 sit downstream of, and it removes SK-108's capacity surface as a side effect. SK-101 is the
 only High: it is a shipped half-feature and gates any non-`SK` project. The rest are M/C and
 independent of each other. SK-111 through SK-113 were filed from the playset s5 run (E3, an
-HTTP-API sprint); s5 also corroborated SK-107, which is re-pointed C→M.
+HTTP-API sprint); s5 also corroborated SK-107, which is re-pointed C→M. SK-114 through
+SK-116 were filed from the ledgerus runs (a brownfield Django app, joined at s3) — the first
+non-playset evidence in this epic. SK-114 is the only row here that blocks a run already in
+progress: ledgerus s6 is at REVIEW with a null backlog now.
 
 ---
 
