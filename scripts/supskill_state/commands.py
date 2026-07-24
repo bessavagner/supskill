@@ -45,6 +45,7 @@ def init_sprint(
     entry: str = "SCOPE",
     backlog: str | None = None,
     branch: str | None = None,
+    continues: str | None = None,
     archive: bool = False,
     root: Path | None = None,
 ) -> State:
@@ -64,7 +65,18 @@ def init_sprint(
             "(no verb can set it after init; PLAN and EXECUTE entries may omit it)"
         )
 
+    if continues is not None:
+        if not continues.strip():
+            raise StateError("--continues needs a sprint id, not an empty string")
+        if entry_stage is Stage.SCOPE:
+            raise StateError(
+                "a SCOPE-entry sprint continues nothing: it scopes its own doc from the "
+                "backlog. --continues names the sprint a PLAN- or EXECUTE-entry sprint "
+                "resumes work on"
+            )
+
     path = store.state_path(root)
+    inherited: str | None = None
     if path.exists():
         if not archive:
             raise StateError(
@@ -74,12 +86,25 @@ def init_sprint(
         undecided = _undecided_review_refusal(path)
         if undecided is not None:
             raise StateError(undecided)
+        inherited = _existing_sprint_id(path)
         _archive_existing(root)
+    # SK-116: a PLAN- or EXECUTE-entry sprint that archives one is continuing it. Record
+    # that rather than requiring the conductor to remember the flag - the row exists
+    # because "s6 continues s5" and "s6's doc is misnamed" were indistinguishable on disk.
+    if continues is None and entry_stage is not Stage.SCOPE:
+        continues = inherited
 
     state = State(
         schema=1,
         backlog=backlog,
-        sprint=SprintInfo(id=sprint_id, slug=slug, entry=entry_stage, branch=branch, scratch=scratch),
+        sprint=SprintInfo(
+            id=sprint_id,
+            slug=slug,
+            entry=entry_stage,
+            branch=branch,
+            scratch=scratch,
+            continues=continues,
+        ),
         stage=entry_stage,
         artifacts={key: None for key in ARTIFACT_KEYS},
         gates={key: None for key in GATE_KEYS.values()},
@@ -134,6 +159,16 @@ def _undecided_review_refusal(path: Path) -> str | None:
     )
 
 
+def _existing_sprint_id(path: Path) -> str | None:
+    """The outgoing sprint's id as it was typed, or None if unreadable (SK-116)."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        value = raw["sprint"]["id"]
+    except Exception:
+        return None  # an unreadable old state is archived, not refused; it just names nothing
+    return value if isinstance(value, str) and value.strip() else None
+
+
 def _archive_existing(root: Path) -> Path:
     supdir = store.supskill_dir(root)
     old_id = "unknown"
@@ -164,8 +199,10 @@ def render_show(root: Path | None = None) -> str:
         f"sprint {state.sprint.id}{slug} - stage {state.stage.value} "
         f"(entered at {state.sprint.entry.value})",
         f"backlog: {state.backlog or '-'}",
-        "artifacts:",
     ]
+    if state.sprint.continues:
+        lines.append(f"continues: {state.sprint.continues}")
+    lines.append("artifacts:")
     for key in ARTIFACT_KEYS:
         lines.append(f"  {key}: {state.artifacts[key] or '-'}")
     lines.append("gates:")

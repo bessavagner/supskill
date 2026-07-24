@@ -6,7 +6,8 @@
     "slug": "alerting-spine",
     "entry": "SCOPE",
     "branch": "feat/e10-alerting-spine",
-    "scratch": ".superpowers/sdd/s10/"
+    "scratch": ".superpowers/sdd/s10/",
+    "continues": null
   },
   "stage": "SCOPE",
   "artifacts": {

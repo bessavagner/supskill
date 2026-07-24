@@ -202,3 +202,47 @@ def test_a_non_utf8_old_state_is_still_archived_never_refused(tmp_path):
     state_path(tmp_path).write_bytes(garbage)
     init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
     assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_bytes() == garbage
+
+
+# --- SK-116: recording the continuation ---
+
+def test_an_execute_entry_over_an_archived_sprint_inherits_its_id(tmp_path):
+    # requiring the conductor to remember --continues would reproduce the defect:
+    # a fact recorded only when an agent thinks to record it
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert state.sprint.continues == "s5"
+
+
+def test_an_explicit_continues_wins_over_the_inherited_id(tmp_path):
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, continues="s3", root=tmp_path)
+    assert state.sprint.continues == "s3"
+
+
+def test_a_first_sprint_continues_nothing(tmp_path):
+    assert init_sprint("s1", entry="EXECUTE", root=tmp_path).sprint.continues is None
+
+
+def test_a_scope_entry_never_inherits_a_continuation(tmp_path):
+    # a SCOPE sprint scopes its own doc from the backlog; it continues nothing
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path)
+    assert state.sprint.continues is None
+
+
+def test_continues_with_a_scope_entry_is_refused_before_touching_disk(tmp_path):
+    with pytest.raises(StateError, match="continues nothing"):
+        init_sprint("s6", backlog="backlog.md", continues="s5", root=tmp_path)
+    assert not supskill_dir(tmp_path).exists()
+
+
+def test_an_empty_continues_is_refused(tmp_path):
+    with pytest.raises(StateError, match="--continues"):
+        init_sprint("s6", entry="EXECUTE", continues="   ", root=tmp_path)
+
+
+def test_cli_init_accepts_continues(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "s6", "--entry", "EXECUTE", "--continues", "s5"]) == 0
+    assert load_state(state_path(tmp_path)).sprint.continues == "s5"

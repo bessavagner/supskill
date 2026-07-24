@@ -46,6 +46,12 @@ def _add_init(subparsers) -> None:
     sub.add_argument("--backlog", help="path to the backlog driving this sprint (required when entry is SCOPE)")
     sub.add_argument("--branch", help="git branch for this sprint")
     sub.add_argument(
+        "--continues",
+        metavar="SPRINT_ID",
+        help="the sprint this one continues; defaults to the archived sprint's id on a "
+             "PLAN or EXECUTE entry, and is refused on a SCOPE entry",
+    )
+    sub.add_argument(
         "--archive",
         action="store_true",
         help="archive an existing run under runs/<old-id>/ instead of refusing",
@@ -60,6 +66,7 @@ def _cmd_init(args) -> int:
         entry=args.entry,
         backlog=args.backlog,
         branch=args.branch,
+        continues=args.continues,
         archive=args.archive,
     )
     print(

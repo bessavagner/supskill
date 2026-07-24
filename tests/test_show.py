@@ -115,3 +115,14 @@ def test_cli_show_json(tmp_path, monkeypatch, capsys):
     assert parsed["sprint"]["id"] == "s1"
     assert set(parsed["artifacts"]) == {"sprint_doc", "dev_plan"}
     assert parsed["backlog"] == "backlog.md"
+
+
+def test_show_names_the_sprint_a_continuation_continues(tmp_path):
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert "continues: s5" in render_show(tmp_path)
+
+
+def test_show_says_nothing_about_continuation_when_there_is_none(tmp_path):
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    assert "continues:" not in render_show(tmp_path)
