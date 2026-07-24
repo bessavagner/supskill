@@ -20,7 +20,9 @@ from supskill_state.replan_guard import (
     AMENDING_SHAPES,
     REPLAN_SHAPES,
     is_supersede,
+    lacks_backlog_target,
     refusal,
+    target_refusal,
 )
 
 
@@ -89,7 +91,10 @@ def test_every_trail_file_this_module_writes_is_jsonl_never_markdown():
 
 # --- the CLI call site: SK-056 ---
 
-def test_cli_exit_codes_for_replan_guard(capsys):
+def test_cli_exit_codes_for_replan_guard(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    commands.init_sprint("s1", backlog="docs/backlog.md", root=tmp_path)
+
     assert main(["replan-guard", "--shape", "generative-writeback"]) == 0
     assert "is an amending shape" in capsys.readouterr().out
 
@@ -99,7 +104,61 @@ def test_cli_exit_codes_for_replan_guard(capsys):
     assert "author the new backlog by hand" in err
 
 
-def test_replan_guard_needs_no_state_file(tmp_path, monkeypatch):
-    # it is a query, not a verb: it must work before init and after a wipe, like plan-guard
+def test_the_supersede_shape_still_needs_no_state_file(tmp_path, monkeypatch, capsys):
+    # shape 4 is refused for what it IS, before any state is read: it must still
+    # work before init and after a wipe, like plan-guard
     monkeypatch.chdir(tmp_path)
-    assert main(["replan-guard", "--shape", "park-at-boundary"]) == 0
+    assert main(["replan-guard", "--shape", "north-star-reset"]) == 1
+    assert "operator's alone" in capsys.readouterr().err
+
+
+# --- SK-114: the precondition the shape check never had ---
+
+@pytest.mark.parametrize("shape", AMENDING_SHAPES)
+def test_an_amending_shape_with_no_recorded_backlog_lacks_a_target(shape):
+    assert lacks_backlog_target(shape, None) is True
+    assert lacks_backlog_target(shape, "") is True
+    assert lacks_backlog_target(shape, "   ") is True
+
+
+@pytest.mark.parametrize("shape", AMENDING_SHAPES)
+def test_an_amending_shape_with_a_recorded_backlog_has_its_target(shape):
+    assert lacks_backlog_target(shape, "docs/plans/sprints/backlog-01/backlog.md") is False
+
+
+def test_the_supersede_shape_is_never_judged_on_its_target():
+    # shape 4 is refused for what it is; a backlog it could write to is beside the point
+    assert lacks_backlog_target("north-star-reset", None) is False
+
+
+def test_an_unknown_shape_still_raises_here_too():
+    with pytest.raises(StateError, match="unknown replan shape"):
+        lacks_backlog_target("some other reading", None)
+
+
+def test_the_target_refusal_names_the_sprint_the_null_and_the_operators_move():
+    text = target_refusal("generative-writeback", "s6")
+    assert "s6" in text
+    assert "backlog: null" in text
+    assert "--backlog" in text
+    assert "inferred" in text  # names the guess it exists to stop
+
+
+def test_target_refusal_refuses_to_run_on_the_supersede_shape():
+    with pytest.raises(StateError, match="its own refusal"):
+        target_refusal("north-star-reset", "s6")
+
+
+def test_cli_refuses_a_writeback_with_no_authorized_destination(tmp_path, monkeypatch, capsys):
+    # the ledgerus s6 case, exactly: --entry EXECUTE carries backlog: null to Gate 3
+    monkeypatch.chdir(tmp_path)
+    commands.init_sprint("s6", entry="EXECUTE", root=tmp_path)
+    assert main(["replan-guard", "--shape", "generative-writeback"]) == 1
+    err = capsys.readouterr().err
+    assert "s6" in err and "backlog: null" in err
+
+
+def test_cli_reads_state_from_an_explicit_dir(tmp_path, capsys):
+    commands.init_sprint("s6", entry="EXECUTE", root=tmp_path)
+    assert main(["replan-guard", "--shape", "park-at-boundary", "--dir", str(tmp_path)]) == 1
+    assert "s6" in capsys.readouterr().err

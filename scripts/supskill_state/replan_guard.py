@@ -54,3 +54,44 @@ def refusal(shape: str) -> str:
         "next sprint against it.\n"
         "This run is stopped for you to take that step; it is not offered here for convenience."
     )
+
+
+def lacks_backlog_target(shape: str, backlog: str | None) -> bool:
+    """True iff this amending shape has no recorded backlog to amend (SK-114).
+
+    The supersede shape is never judged here: it is refused for what it is,
+    before any state is read, so it returns False and reaches its own refusal.
+    An unknown shape still raises, via is_supersede - the vocabulary has one
+    owner and this is not a second one.
+
+    What this asks is narrow on purpose: was a destination AUTHORIZED, not is
+    the writeback correct. On ledgerus s6 the conductor inferred the target
+    from artifacts.sprint_doc's parent directory and inferred it right; SCOPE's
+    own rule is that the recorded artifact is the only authority anything
+    downstream reads, and an inference is not a record.
+    """
+    if is_supersede(shape):
+        return False
+    return not (backlog or "").strip()
+
+
+def target_refusal(shape: str, sprint_id: str) -> str:
+    """What the conductor reports, verbatim, when an amending shape has no target."""
+    if is_supersede(shape):
+        raise StateError(
+            f"target_refusal() called on {shape!r}; the supersede shape has its own refusal"
+        )
+    return (
+        f"this Gate 3 answer reads as {shape}, which amends the backlog - and this sprint "
+        "has no backlog to amend.\n"
+        f"state.json records backlog: null for sprint {sprint_id}, so no destination for "
+        "the writeback was ever authorized. A path inferred from artifacts.sprint_doc's "
+        "directory is a guess: the recorded artifact is the only authority anything "
+        "downstream reads, and an inference is not a record.\n"
+        "Nothing was drafted and nothing was written. The move is the operator's: name the "
+        "backlog this sprint amends when you start the next one -\n"
+        "  supskill-state init <next-id> --archive --backlog <path> "
+        "(carrying this sprint's --branch and --slug)\n"
+        "This guard checks that a target was authorized, not that a writeback would be "
+        "correct. A wrong-but-recorded backlog path passes it."
+    )

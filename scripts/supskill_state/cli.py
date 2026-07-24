@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands, commit_scope, config, plan_guard, preflight, replan_guard, worktree
+from . import commands, commit_scope, config, plan_guard, preflight, replan_guard, store, worktree
 from .errors import StateError
 
 
@@ -224,7 +224,7 @@ def _cmd_commit_scope_guard(args) -> int:
 def _add_replan_guard(subparsers) -> None:
     sub = subparsers.add_parser(
         "replan-guard",
-        help="does this Gate 3 replan shape read as a north-star supersede? exit 1 means refuse",
+        help="is this Gate 3 replan shape a supersede, or an amend with no target? exit 1 = refuse",
     )
     sub.add_argument(
         "--shape",
@@ -232,14 +232,26 @@ def _add_replan_guard(subparsers) -> None:
         choices=list(replan_guard.REPLAN_SHAPES),
         help="the conductor's own classification of the operator's Gate 3 answer",
     )
+    sub.add_argument(
+        "--dir",
+        default=None,
+        dest="root",
+        help="the repo root whose .supskill/ holds this sprint's state; default cwd",
+    )
     sub.set_defaults(func=_cmd_replan_guard)
 
 
 def _cmd_replan_guard(args) -> int:
+    # shape 4 is refused for what it is, before any state is read
     if replan_guard.is_supersede(args.shape):
         print(replan_guard.refusal(args.shape), file=sys.stderr)
         return 1
-    print(f"replan-guard: {args.shape} is an amending shape, not a supersede")
+    root = store.resolve_root(Path(args.root) if args.root else None)
+    state = store.load_state(store.state_path(root))
+    if replan_guard.lacks_backlog_target(args.shape, state.backlog):
+        print(replan_guard.target_refusal(args.shape, state.sprint.id), file=sys.stderr)
+        return 1
+    print(f"replan-guard: {args.shape} is an amending shape; it amends {state.backlog}")
     return 0
 
 
