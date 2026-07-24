@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,6 +25,56 @@ SUPSKILL_DIR = ".supskill"
 
 def supskill_dir(root: Path | None = None) -> Path:
     return (root or Path.cwd()) / SUPSKILL_DIR
+
+
+def _linked_worktree_root(cwd: Path) -> Path | None:
+    """The MAIN worktree's root iff `cwd` is a git LINKED worktree, else None.
+
+    SK-111: EXECUTE isolates into `.worktrees/<id>` but `.supskill/` never moves,
+    so a state call from the worktree cwd must find the main root's `.supskill/`.
+    A linked worktree is exactly the case where `--git-dir`
+    (`<main>/.git/worktrees/<id>`) differs from `--git-common-dir` (`<main>/.git`);
+    the main root is the common dir's parent. A main worktree, a subdirectory of
+    one, or a non-repo cwd all return None here, preserving the deliberate
+    no-upward-search behavior everywhere except the linked-worktree case git can
+    identify unambiguously. Never raises: a missing git binary or a non-repo cwd
+    is None, not a crash.
+    """
+    try:
+        git_dir = _rev_parse_abs(cwd, "--git-dir")
+        common = _rev_parse_abs(cwd, "--git-common-dir")
+    except (OSError, StateError):
+        return None
+    if git_dir is None or common is None or git_dir == common:
+        return None
+    return common.parent
+
+
+def _rev_parse_abs(cwd: Path, what: str) -> Path | None:
+    result = subprocess.run(
+        ["git", "-C", str(cwd), "rev-parse", "--path-format=absolute", what],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    out = result.stdout.strip()
+    return Path(out) if out else None
+
+
+def resolve_root(root: Path | None = None) -> Path:
+    """The directory whose `.supskill/` holds this sprint's state.
+
+    An explicit `root` wins unchanged. Otherwise: cwd if it already carries
+    `.supskill/` (the fast path — no git call); else the main worktree root when
+    cwd is a linked worktree (SK-111); else cwd, unchanged.
+    """
+    if root is not None:
+        return Path(root)
+    cwd = Path.cwd()
+    if (cwd / SUPSKILL_DIR).is_dir():
+        return cwd
+    return _linked_worktree_root(cwd) or cwd
 
 
 def state_path(root: Path | None = None) -> Path:
