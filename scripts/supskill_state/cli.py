@@ -295,7 +295,7 @@ def _cmd_artifact_guard(args) -> int:
         print("artifact-guard: no artifacts recorded; there is nothing to check")
         return 0
     tracked = artifact_tracking.git_tracked(str(root), recorded)
-    missing = artifact_tracking.untracked(recorded, tracked)
+    missing = artifact_tracking.untracked(recorded, tracked, root=str(root))
     if missing:
         print(artifact_tracking.refusal(missing), file=sys.stderr)
         return 1

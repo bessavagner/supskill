@@ -23,16 +23,34 @@ git knows the file, not whether its contents match the sprint.
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 from .errors import StateError
 
 
-def _normalize(path: str) -> str:
+def _normalize(path: str, root: str | None = None) -> str:
+    """A recorded path in git's own comparison frame, not the frame it was typed in.
+
+    `git ls-files` prints the canonical relative form regardless of how a pathspec
+    was written - `docs//x.md`, `docs/../docs/x.md` and an absolute path all resolve
+    to the same tracked file. Comparing that canonical output against a raw recorded
+    string false-refuses a genuinely tracked artifact, so this collapses the recorded
+    string into the same frame before the comparison ever happens: `os.path.normpath`
+    resolves the redundant separators and internal `..`, and an absolute path that
+    lands under `root` is rewritten relative to it. An absolute path outside `root`,
+    or a `..` that escapes it, is left alone - `git_tracked` already turns that into a
+    loud StateError rather than a silent pass, and this function never overrides that.
+    """
     path = path.strip()
-    while path.startswith("./"):
-        path = path[2:]
-    return path
+    if not path:
+        return ""
+    normalized = os.path.normpath(path)
+    if root is not None and os.path.isabs(normalized):
+        relative = os.path.relpath(normalized, os.path.normpath(root))
+        if relative != os.pardir and not relative.startswith(os.pardir + os.sep):
+            normalized = relative
+    return normalized
 
 
 def git_tracked(root: str, paths: list[str]) -> set[str]:
@@ -54,12 +72,18 @@ def git_tracked(root: str, paths: list[str]) -> set[str]:
     return {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
 
-def untracked(paths: list[str], tracked: set[str]) -> list[str]:
-    """The recorded paths git does not track, in order, deduped."""
+def untracked(paths: list[str], tracked: set[str], root: str | None = None) -> list[str]:
+    """The recorded paths git does not track, in order, deduped.
+
+    `tracked` is `git ls-files`' canonical output (see `git_tracked`); `root` lets a
+    recorded path that was written as an absolute path under the repo normalize to
+    that same canonical form before comparison. Omit `root` only when every path is
+    already relative and canonically shaped, e.g. in a pure unit test.
+    """
     seen: set[str] = set()
     missing: list[str] = []
     for raw in paths:
-        path = _normalize(raw)
+        path = _normalize(raw, root)
         if not path or path in seen:
             continue
         seen.add(path)

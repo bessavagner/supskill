@@ -30,6 +30,16 @@ def test_a_leading_dot_slash_is_normalized_before_comparing():
     assert untracked(["./docs/sprint-s6.md"], {"docs/sprint-s6.md"}) == []
 
 
+def test_a_redundant_separator_is_normalized_before_comparing():
+    # `git ls-files` prints "docs/sprint-s6.md" for this pathspec too; the raw
+    # recorded string must not be compared against that output verbatim
+    assert untracked(["docs//sprint-s6.md"], {"docs/sprint-s6.md"}) == []
+
+
+def test_an_internally_resolving_dotdot_is_normalized_before_comparing():
+    assert untracked(["docs/../docs/sprint-s6.md"], {"docs/sprint-s6.md"}) == []
+
+
 def test_duplicates_are_collapsed():
     assert untracked(["docs/a.md", "docs/a.md"], set()) == ["docs/a.md"]
 
@@ -87,6 +97,18 @@ def test_cli_refuses_an_untracked_sprint_doc(sprint_repo, capsys):
 def test_cli_passes_once_the_doc_is_committed(sprint_repo, capsys):
     _git(sprint_repo, "add", "docs/sprint-s6.md")
     _git(sprint_repo, "commit", "-q", "-m", "docs: the sprint doc")
+    assert main(["artifact-guard", "--dir", str(sprint_repo)]) == 0
+    assert "tracked by git" in capsys.readouterr().out
+
+
+def test_cli_passes_for_an_artifact_recorded_by_an_absolute_path(sprint_repo, capsys):
+    # record_artifact only checks the path exists; nothing constrains its shape, so an
+    # absolute path landing inside the repo is reachable in production. `git ls-files`
+    # accepts it and prints the file's canonical relative form - the comparison must
+    # land in that same frame, not false-refuse a file that is genuinely tracked.
+    _git(sprint_repo, "add", "docs/sprint-s6.md")
+    _git(sprint_repo, "commit", "-q", "-m", "docs: the sprint doc")
+    record_artifact("sprint_doc", str(sprint_repo / "docs" / "sprint-s6.md"), root=sprint_repo)
     assert main(["artifact-guard", "--dir", str(sprint_repo)]) == 0
     assert "tracked by git" in capsys.readouterr().out
 
