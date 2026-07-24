@@ -175,3 +175,13 @@ def test_the_blocker_rules_forbid_a_fabricated_second_option():
 
 def test_the_conductor_never_acts_on_its_own_recommendation():
     assert "advice, not a decision" in execute_section()
+
+
+def test_the_task_review_dispatch_writes_findings_to_a_file_not_the_reply():
+    # SK-112: SDD's task-reviewer prompt returns findings as its final message,
+    # which collapsed to a placeholder on the playset s5 run. The conductor must
+    # point the reviewer at a file and read that, never the chat reply.
+    section = execute_section()
+    assert "task-<N>-review-findings.md" in section
+    assert "read that file" in section
+    assert "never the reply" in section
