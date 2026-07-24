@@ -115,8 +115,8 @@ def _undecided_review_refusal(path: Path) -> str | None:
     """
     try:
         old = loads_state(path.read_text(encoding="utf-8"))
-    except (OSError, StateError):
-        return None
+    except Exception:
+        return None  # unreadable old state: nothing to refuse, same rule as _archive_existing
     if old.stage is not Stage.REVIEW or old.gates[GATE_KEYS["G3"]] is not None:
         return None
     return (

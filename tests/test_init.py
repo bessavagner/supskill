@@ -192,3 +192,13 @@ def test_an_unreadable_old_state_is_still_archived_never_refused(tmp_path):
     state_path(tmp_path).write_text("{corrupted")
     init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
     assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_text() == "{corrupted"
+
+
+def test_a_non_utf8_old_state_is_still_archived_never_refused(tmp_path):
+    # a state.json that isn't even valid UTF-8: read_text raises UnicodeDecodeError,
+    # not OSError - the "unreadable old state" rule must cover this too
+    supskill_dir(tmp_path).mkdir(parents=True)
+    garbage = b"\xff\xfe\x00\x01garbage not utf8"
+    state_path(tmp_path).write_bytes(garbage)
+    init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_bytes() == garbage
