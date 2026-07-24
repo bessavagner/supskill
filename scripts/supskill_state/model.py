@@ -68,6 +68,10 @@ class SprintInfo:
     entry: Stage
     branch: str | None
     scratch: str
+    # SK-116: the sprint this one continues, when it entered at PLAN or EXECUTE
+    # rather than scoping its own doc. Optional on read (a state.json written
+    # before this field simply has no key) and always written back.
+    continues: str | None = None
 
 
 @dataclass
@@ -172,6 +176,9 @@ def _parse_sprint(raw, where: str) -> SprintInfo:
         entry=entry,
         branch=_opt_str(_require(raw, "branch", where), f"{where}.branch"),
         scratch=_req_str(raw, "scratch", where),
+        # .get, not _require: this field post-dates schema v1's other fields and a
+        # state file written without it must still resume (SK-116)
+        continues=_opt_str(raw.get("continues"), f"{where}.continues"),
     )
 
 
@@ -267,6 +274,7 @@ def state_to_dict(state: State) -> dict:
             "entry": state.sprint.entry.value,
             "branch": state.sprint.branch,
             "scratch": state.sprint.scratch,
+            "continues": state.sprint.continues,
         },
         "stage": state.stage.value,
         "artifacts": {key: state.artifacts[key] for key in ARTIFACT_KEYS},

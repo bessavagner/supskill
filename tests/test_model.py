@@ -14,6 +14,8 @@ from supskill_state.model import (
     TaskStatus,
     dumps_state,
     loads_state,
+    state_from_dict,
+    state_to_dict,
 )
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "state_d2_example.json"
@@ -133,3 +135,34 @@ def test_artifacts_keys_must_be_exactly_sprint_doc_and_dev_plan():
 def test_make_state_fixture_is_valid(make_state):
     state = make_state()
     assert loads_state(dumps_state(state)) == state
+
+
+# --- SK-116: the continuation a sprint's state could not express ---
+
+def test_sprint_continues_defaults_to_none(make_state):
+    assert make_state().sprint.continues is None
+
+
+def test_a_state_file_written_before_this_field_still_parses(make_state):
+    # the field is read tolerantly on purpose: a dogfood run is live against a
+    # state.json that has no `continues` key, and the schema version is unchanged
+    raw = state_to_dict(make_state())
+    del raw["sprint"]["continues"]
+    assert state_from_dict(raw).sprint.continues is None
+
+
+def test_continues_round_trips_through_json(make_state):
+    state = make_state()
+    state.sprint.continues = "s5"
+    assert state_from_dict(json.loads(dumps_state(state))).sprint.continues == "s5"
+
+
+def test_state_to_dict_always_writes_the_key(make_state):
+    assert "continues" in state_to_dict(make_state())["sprint"]
+
+
+def test_a_non_string_continues_is_refused(make_state):
+    raw = state_to_dict(make_state())
+    raw["sprint"]["continues"] = 5
+    with pytest.raises(StateError, match="continues"):
+        state_from_dict(raw)

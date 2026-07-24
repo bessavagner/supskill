@@ -26,7 +26,7 @@ everything from that file. Never rely on anything a previous conversation knew.
 - **Never pass `--archive`.** Archiving a half-finished sprint is an operator
   decision. The only thing this skill does with that flag is name it in a
   refusal message and stop — matrix cell 3 or the SCOPE stage's backlog check
-  below.
+  below. `init --archive` itself refuses over a sprint resting at `REVIEW` with no `G3` decision recorded — archiving it would keep the question and lose the answer (SK-115).
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
   and no template instructs an agent to run one or to write under `.supskill/`.
@@ -38,7 +38,8 @@ everything from that file. Never rely on anything a previous conversation knew.
 `$ARGUMENTS` is `run <sprint-id>` (e.g. `run s2`), optionally followed by
 flags that are forwarded to `init` if — and only if — init runs:
 `--entry SCOPE|PLAN|EXECUTE`, `--backlog <path>`, `--branch <name>`,
-`--slug <slug>`.
+`--slug <slug>`, `--continues <sprint-id>` (the sprint a PLAN- or EXECUTE-entry
+sprint resumes; `init` defaults it to the archived sprint's id).
 
 - First token is not `run`, or there is no sprint id AND no
   `.supskill/state.json` in the current directory → print exactly this usage
@@ -69,14 +70,15 @@ Copy this checklist into your response and check items off as you go.
 3. **Compare ids.** Lowercase both the requested sprint id and `sprint.id`
    from the JSON.
    - Equal → this is a resume. Mutate nothing; continue at step 4.
-   - Different → refuse and stop. The refusal must name both ids and the
-     operator's way forward, verbatim:
+   - Different → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
 
          A different sprint is already on disk: state.json holds <sprint.id>,
          you asked for <requested-id>. A half-finished sprint is never
-         archived automatically. If you mean to close it out and start fresh,
-         run: ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive
+         archived automatically. If you mean to close it out and start fresh, run:
+         ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--backlog/--branch/--slug flag from this invocation, verbatim>
 
+     Never drop a flag the operator typed: an init that loses `--backlog` starts
+     a sprint with `backlog: null`, which `replan-guard` refuses at Gate 3.
      Do not run that command. Stop here.
 4. **Report the resume surface.** From the same `show --json` output, report:
    the sprint id and slug, current `stage`, `sprint.entry`, each gate's
@@ -497,7 +499,7 @@ phrasings of the same option. That part is yours.
 PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Each writes its findings to its own `<scratch>/review-findings-<label>.md`, and you read that file — a reviewer's chat reply is a liveness signal, never the findings. Dispatch discipline, the collection rule, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
 ## Gate 3 — one decision, not two
 
-Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every open blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped.
+Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every open blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped. Before you ask the question, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state artifact-guard`: exit 1 means a recorded artifact — the sprint doc or the dev plan — is untracked by git, so the documents that authorize this sprint are not in the branch that implements it. Relay the refusal verbatim and stop; the commit is the operator's, and this skill never runs `git add`.
 
 4. Closes cleanly → `gate --id G3 --decision approved --response "<verbatim>"`. `REVIEW` is the last stage; nothing advances past it.
 5. Resolves into Shape 1, 2 or 3 → `gate --id G3 --decision replan --response "<verbatim>"`, then run the shape's own verb: [references/replan-shapes.md](references/replan-shapes.md).
@@ -505,7 +507,7 @@ Ask for real, refuse an empty answer, record verbatim — the same shape as Gate
 
 ### Refusing a north-star supersede
 
-No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). Confirm your own classification against [references/replan-shapes.md](references/replan-shapes.md) with `replan-guard --shape <generative-writeback|park-at-boundary|fork-on-live-evidence|north-star-reset>`: on the first three shapes it exits 0 and you continue as that shape's row describes; on `north-star-reset` it exits 1 and prints the refusal verbatim on stderr - relay that text to the operator. A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it.
+No code path here can rewrite `backlog.md`'s North star or repoint `state.json.backlog` (true today by construction; a regression test guards it). Confirm your own classification against [references/replan-shapes.md](references/replan-shapes.md) with `replan-guard --shape <generative-writeback|park-at-boundary|fork-on-live-evidence|north-star-reset>`: on the first three shapes it exits 0 and you continue as that shape's row describes; on `north-star-reset` it exits 1 and prints the refusal verbatim on stderr - relay that text to the operator. A Shape-4 reading gets a report, never a `gate` call, a draft, or an edit - the move is the operator's alone: author the new backlog by hand, then start the next sprint against it. The guard also reads state: on an amending shape it refuses when `state.backlog` is null, because a writeback whose destination was never recorded is a path you inferred, not a path anything authorized (SK-114). Relay that refusal verbatim too.
 
 ## Propose the next sprint, then stop
 

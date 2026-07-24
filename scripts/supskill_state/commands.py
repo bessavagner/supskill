@@ -27,6 +27,7 @@ from .model import (
     State,
     Task,
     TaskStatus,
+    loads_state,
     parse_task_status,
     state_to_dict,
 )
@@ -44,6 +45,7 @@ def init_sprint(
     entry: str = "SCOPE",
     backlog: str | None = None,
     branch: str | None = None,
+    continues: str | None = None,
     archive: bool = False,
     root: Path | None = None,
 ) -> State:
@@ -63,19 +65,46 @@ def init_sprint(
             "(no verb can set it after init; PLAN and EXECUTE entries may omit it)"
         )
 
+    if continues is not None:
+        if not continues.strip():
+            raise StateError("--continues needs a sprint id, not an empty string")
+        if entry_stage is Stage.SCOPE:
+            raise StateError(
+                "a SCOPE-entry sprint continues nothing: it scopes its own doc from the "
+                "backlog. --continues names the sprint a PLAN- or EXECUTE-entry sprint "
+                "resumes work on"
+            )
+
     path = store.state_path(root)
+    inherited: str | None = None
     if path.exists():
         if not archive:
             raise StateError(
                 f"{path} already exists; pass --archive to archive the old run first "
                 "(prior state is never destroyed)"
             )
+        undecided = _undecided_review_refusal(path)
+        if undecided is not None:
+            raise StateError(undecided)
+        inherited = _existing_sprint_id(path)
         _archive_existing(root)
+    # SK-116: a PLAN- or EXECUTE-entry sprint that archives one is continuing it. Record
+    # that rather than requiring the conductor to remember the flag - the row exists
+    # because "s6 continues s5" and "s6's doc is misnamed" were indistinguishable on disk.
+    if continues is None and entry_stage is not Stage.SCOPE:
+        continues = inherited
 
     state = State(
         schema=1,
         backlog=backlog,
-        sprint=SprintInfo(id=sprint_id, slug=slug, entry=entry_stage, branch=branch, scratch=scratch),
+        sprint=SprintInfo(
+            id=sprint_id,
+            slug=slug,
+            entry=entry_stage,
+            branch=branch,
+            scratch=scratch,
+            continues=continues,
+        ),
         stage=entry_stage,
         artifacts={key: None for key in ARTIFACT_KEYS},
         gates={key: None for key in GATE_KEYS.values()},
@@ -89,6 +118,55 @@ def init_sprint(
         gates_file.touch()
     store.dump_state(state, path)
     return state
+
+
+def _undecided_review_refusal(path: Path) -> str | None:
+    """SK-115: the refusal when the outgoing sprint rests at REVIEW with G3 open.
+
+    A sprint that reached REVIEW and never recorded a Gate 3 decision is the one
+    case where archiving keeps the question and loses the answer. ledgerus s5 is
+    the instance on record: it halted on a genuine blocker, the operator resolved
+    it out of band, s6 was inited over it, and runs/s5/archive-1/gates.jsonl
+    holds G1 and G2 and no G3 - how that blocker was decided exists nowhere on
+    disk. This is the append-only trail failing at the point it was built for.
+
+    Returns the refusal text, or None when there is nothing to refuse. An old
+    state that cannot be READ returns None: it is archived, never destroyed
+    (test_init_archives_unreadable_old_state_under_unknown), and refusing on a
+    parse error would turn that guarantee into its opposite.
+
+    The ceiling: this checks that a decision was RECORDED, not that it was the
+    right one. `gate --id G3 --decision approved --response "."` satisfies it.
+    """
+    try:
+        old = loads_state(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None  # unreadable old state: nothing to refuse, same rule as _archive_existing
+    if old.stage is not Stage.REVIEW or old.gates[GATE_KEYS["G3"]] is not None:
+        return None
+    return (
+        f"sprint {old.sprint.id} rests at REVIEW with no Gate 3 decision recorded. "
+        "Archiving it now would keep the question and lose the answer.\n"
+        "What a later reader has is the trail: runs/<id>/archive-N/gates.jsonl. A sprint "
+        "that halted on a real blocker and was superseded out of band leaves nothing in it "
+        "saying how that blocker was decided - the decision that mattered most is the one "
+        "the archive drops.\n"
+        "Record it first, with the verb that already exists, then re-run this init:\n"
+        f"  supskill-state gate --id G3 --decision <approved|rejected|replan> "
+        '--response "<what you decided, verbatim>"\n'
+        "Nothing was archived and nothing was created; the sprint on disk is untouched.\n"
+        "This checks that a decision was recorded, not that it was the right one."
+    )
+
+
+def _existing_sprint_id(path: Path) -> str | None:
+    """The outgoing sprint's id as it was typed, or None if unreadable (SK-116)."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        value = raw["sprint"]["id"]
+    except Exception:
+        return None  # an unreadable old state is archived, not refused; it just names nothing
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _archive_existing(root: Path) -> Path:
@@ -121,8 +199,10 @@ def render_show(root: Path | None = None) -> str:
         f"sprint {state.sprint.id}{slug} - stage {state.stage.value} "
         f"(entered at {state.sprint.entry.value})",
         f"backlog: {state.backlog or '-'}",
-        "artifacts:",
     ]
+    if state.sprint.continues:
+        lines.append(f"continues: {state.sprint.continues}")
+    lines.append("artifacts:")
     for key in ARTIFACT_KEYS:
         lines.append(f"  {key}: {state.artifacts[key] or '-'}")
     lines.append("gates:")

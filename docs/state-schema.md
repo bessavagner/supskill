@@ -29,6 +29,12 @@ files (invariant 3). Layout:
 - `backlog` (string|null): path to the backlog driving this sprint.
 - `sprint.id` (string): as the operator typed it (e.g. `S10`).
 - `sprint.slug` (string|null), `sprint.branch` (string|null).
+- `sprint.continues` (string|null): the sprint this one continues, when it
+  entered at `PLAN` or `EXECUTE` rather than scoping its own doc. `init` sets it
+  from `--continues`, and defaults it to the archived sprint's id on a non-`SCOPE`
+  entry that passes `--archive`. Read tolerantly: a `state.json` written before
+  this field simply has no key and parses as null, which is why adding it did not
+  bump `schema` (SK-116).
 - `sprint.entry` (string): `SCOPE | PLAN | EXECUTE` (D7). Preconditions attach
   to *transitions taken*, not stages - a sprint entering at EXECUTE never
   crosses the G2 check.

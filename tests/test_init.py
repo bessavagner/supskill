@@ -139,3 +139,110 @@ def test_cli_config_rejects_an_invalid_prefix(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["config", "--story-id-prefix", "blk"]) == 1
     assert "story-id-prefix" in capsys.readouterr().err
+
+
+# --- SK-115: archiving a sprint that never recorded its Gate 3 decision ---
+
+def _at_review_with_g3(tmp_path, decision):
+    """A sprint resting at REVIEW, with G3 either recorded or still open."""
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.stage = Stage.REVIEW
+    state.gates["G3_review"] = decision
+    from supskill_state.store import dump_state
+
+    dump_state(state, state_path(tmp_path))
+
+
+def test_archive_refuses_over_a_review_sprint_with_no_gate_three_decision(tmp_path):
+    _at_review_with_g3(tmp_path, None)
+    before = state_path(tmp_path).read_bytes()
+    with pytest.raises(StateError, match="no Gate 3 decision") as excinfo:
+        init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    message = str(excinfo.value)
+    assert "s5" in message
+    assert "gate --id G3" in message  # names the verb that records the answer
+    assert state_path(tmp_path).read_bytes() == before  # nothing archived, nothing created
+    assert not (runs_dir(tmp_path) / "s5" / "archive-1").exists()
+
+
+@pytest.mark.parametrize("decision", ["approved", "rejected", "replan"])
+def test_archive_proceeds_once_any_gate_three_decision_is_recorded(tmp_path, decision):
+    _at_review_with_g3(tmp_path, decision)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert state.sprint.id == "s6"
+    assert (runs_dir(tmp_path) / "s5" / "archive-1" / "state.json").exists()
+
+
+@pytest.mark.parametrize("stage", [Stage.SCOPE, Stage.PLAN, Stage.EXECUTE])
+def test_archive_is_untouched_for_a_sprint_that_never_reached_review(tmp_path, stage):
+    # the row is about REVIEW specifically: an earlier stage has no G3 to record
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.stage = stage
+    from supskill_state.store import dump_state
+
+    dump_state(state, state_path(tmp_path))
+    assert init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path).sprint.id == "s6"
+
+
+def test_an_unreadable_old_state_is_still_archived_never_refused(tmp_path):
+    # SK-115 must not turn "never destroy prior state" into "never archive it"
+    supskill_dir(tmp_path).mkdir(parents=True)
+    state_path(tmp_path).write_text("{corrupted")
+    init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_text() == "{corrupted"
+
+
+def test_a_non_utf8_old_state_is_still_archived_never_refused(tmp_path):
+    # a state.json that isn't even valid UTF-8: read_text raises UnicodeDecodeError,
+    # not OSError - the "unreadable old state" rule must cover this too
+    supskill_dir(tmp_path).mkdir(parents=True)
+    garbage = b"\xff\xfe\x00\x01garbage not utf8"
+    state_path(tmp_path).write_bytes(garbage)
+    init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert (runs_dir(tmp_path) / "unknown" / "archive-1" / "state.json").read_bytes() == garbage
+
+
+# --- SK-116: recording the continuation ---
+
+def test_an_execute_entry_over_an_archived_sprint_inherits_its_id(tmp_path):
+    # requiring the conductor to remember --continues would reproduce the defect:
+    # a fact recorded only when an agent thinks to record it
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, root=tmp_path)
+    assert state.sprint.continues == "s5"
+
+
+def test_an_explicit_continues_wins_over_the_inherited_id(tmp_path):
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", entry="EXECUTE", archive=True, continues="s3", root=tmp_path)
+    assert state.sprint.continues == "s3"
+
+
+def test_a_first_sprint_continues_nothing(tmp_path):
+    assert init_sprint("s1", entry="EXECUTE", root=tmp_path).sprint.continues is None
+
+
+def test_a_scope_entry_never_inherits_a_continuation(tmp_path):
+    # a SCOPE sprint scopes its own doc from the backlog; it continues nothing
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path)
+    assert state.sprint.continues is None
+
+
+def test_continues_with_a_scope_entry_is_refused_before_touching_disk(tmp_path):
+    with pytest.raises(StateError, match="continues nothing"):
+        init_sprint("s6", backlog="backlog.md", continues="s5", root=tmp_path)
+    assert not supskill_dir(tmp_path).exists()
+
+
+def test_an_empty_continues_is_refused(tmp_path):
+    with pytest.raises(StateError, match="--continues"):
+        init_sprint("s6", entry="EXECUTE", continues="   ", root=tmp_path)
+
+
+def test_cli_init_accepts_continues(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "s6", "--entry", "EXECUTE", "--continues", "s5"]) == 0
+    assert load_state(state_path(tmp_path)).sprint.continues == "s5"
