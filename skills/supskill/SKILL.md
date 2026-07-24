@@ -359,6 +359,17 @@ The cycle:
    Important finding. That is SDD's cycle, unchanged. Cost each dispatch as it
    completes, `--label <N>-implementer` / `<N>-task-reviewer` / `<N>-fix`
    (`<N>` = this heading's task number).
+
+   **The task reviewer writes its findings to a file, never to its reply.** SDD's
+   task-reviewer prompt returns its findings as its final chat message, and a
+   dispatched agent's final message is exactly what collapses to a placeholder
+   (the same failure `7dfb0f9` fixed for supskill's own dispatches). So when you
+   dispatch the task reviewer, tell it — in addition to SDD's prompt — to write
+   its full findings and its two verdicts (spec compliance, task quality) to
+   `<scratch>/task-<N>-review-findings.md` and to return only a one-line status.
+   You then **read that file** for the verdicts and act on them; you rely on the
+   file, **never the reply**. A reviewer that cannot write the file says so in the
+   one line it returns, which is loud — a lost finding read as an approval is not.
 2. Map what SDD reported onto the spine, **before the next dispatch begins** — a
    `/clear` or a crash mid-drain then costs at most one task's work:
 

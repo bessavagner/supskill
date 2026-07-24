@@ -47,7 +47,7 @@ def init_sprint(
     archive: bool = False,
     root: Path | None = None,
 ) -> State:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     try:
         entry_stage = Stage(entry)
     except ValueError:
@@ -112,7 +112,7 @@ def _archive_existing(root: Path) -> Path:
 
 
 def render_show(root: Path | None = None) -> str:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
     responses = _last_gate_responses(root)
 
@@ -157,7 +157,7 @@ def render_show_json(root: Path | None = None) -> str:
     The conductor's dispatch consumes this instead of parsing state.json
     itself - the schema stays the CLI's concern, never skill prose's.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
     return json.dumps(state_to_dict(state), indent=2) + "\n"
 
@@ -181,7 +181,7 @@ def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
 
 
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     if name not in ARTIFACT_KEYS:
         raise StateError(f"unknown artifact {name!r}; expected one of {list(ARTIFACT_KEYS)}")
     if not file_path:
@@ -195,7 +195,7 @@ def record_artifact(name: str, file_path: str, root: Path | None = None) -> Stat
 
 
 def record_gate(gate_id: str, decision: str, response: str, root: Path | None = None) -> State:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     if gate_id not in GATE_KEYS:
         raise StateError(f"unknown gate {gate_id!r}; expected one of {sorted(GATE_KEYS)}")
     if decision not in GATE_DECISIONS:
@@ -225,7 +225,7 @@ def record_blocker(
     recommend: str,
     root: Path | None = None,
 ) -> State:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     # validate the whole record BEFORE touching disk: a rejected record writes nothing anywhere
     for flag, value in (("--task", task_id), ("--kind", kind), ("--found", found), ("--recommend", recommend)):
         if not value:
@@ -290,7 +290,7 @@ def load_tasks(
     operator who really wants a fresh load has `init --archive`; this verb never
     runs it.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     doc_path = root / doc
     if not doc_path.is_file():
         raise StateError(f"no such doc: {doc}")
@@ -338,7 +338,7 @@ def set_story_id_prefix(prefix: str, *, root: Path | None = None) -> str:
     Returns the prefix that was configured before this call (DEFAULT_STORY_ID_PREFIX
     if none was set), so the CLI can report what changed.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     previous = config.load_story_id_prefix(root)
     config.write_story_id_prefix(prefix, root=root)
     return previous
@@ -363,7 +363,7 @@ def record_task_status(
     Re-recording is legal and appends - last status wins in state, every attempt
     stays in the trail. Gate 3 (E6) reads the trail; nothing re-parses prose.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     if not task_id:
         raise StateError("a status record requires a non-empty --id")
     # the model owns the vocabulary: NEEDS_CONTEXT and unknown statuses raise ITS message
@@ -421,7 +421,7 @@ def record_cost(
     whether a SCOPE pass earns its keep) get answered from real numbers
     instead of estimation.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     try:
         stage_value = Stage(stage).value
     except ValueError:
@@ -471,7 +471,7 @@ def record_review_finding(
     finding reported by one reviewer can only be actionable. The rule has no
     negotiation, so a mismatched --confidence is refused, not accepted.
     """
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     parsed_reviewer = parse_reviewer(reviewer, "review --reviewer")
     parsed_severity = parse_severity(severity, "review --severity")
     parsed_confidence = parse_confidence(confidence, "review --confidence")
@@ -505,7 +505,7 @@ def record_review_finding(
 
 
 def advance_stage(to: str, root: Path | None = None) -> State:
-    root = Path(root) if root is not None else Path.cwd()
+    root = store.resolve_root(root)
     try:
         target = Stage(to)
     except ValueError:
