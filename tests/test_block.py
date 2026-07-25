@@ -52,6 +52,8 @@ def test_one_command_three_effects_asserted_together(tmp_path):
     lines = _blocker_lines(tmp_path)
     assert len(lines) == 1
     require_aware_utc_iso(lines[0].pop("at"), "blockers.jsonl at")
+    # SK-102: plan_headings is [] here - no dev_plan artifact is recorded in this fixture
+    assert lines[0].pop("plan_headings") == []
     assert lines[0] == S9A  # D5's fixture round-trips verbatim
 
     state = load_state(state_path(tmp_path))

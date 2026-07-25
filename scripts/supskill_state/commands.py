@@ -33,7 +33,7 @@ from .model import (
     parse_task_status,
     state_to_dict,
 )
-from .plan_coverage import validate_plan_coverage
+from .plan_coverage import headings_for_story, validate_plan_coverage
 from .proofs import parse_proof_lines
 from .review import aggregate, parse_confidence, parse_reviewer, parse_severity
 from .scratch import derive_scratch, normalize_sprint_id
@@ -223,6 +223,7 @@ def render_show(root: Path | None = None) -> str:
 
     open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
     notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+    headings = _blocker_plan_headings(root, state.sprint.id) if open_blockers else {}
 
     if open_blockers:
         lines.append("open blockers:")
@@ -231,6 +232,11 @@ def render_show(root: Path | None = None) -> str:
             for option in blocker.options:
                 lines.append(f"      {option}")
             lines.append(f"    recommend: {blocker.recommend}")
+            halted = headings.get(blocker.task, [])
+            if halted:
+                lines.append("    plan headings this blocker halted:")
+                for heading in halted:
+                    lines.append(f"      {heading}")
     else:
         lines.append("open blockers: none")
 
@@ -308,6 +314,18 @@ def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, 
     return notes
 
 
+def _blocker_plan_headings(root: Path | None, sprint_id: str) -> dict[str, list[str]]:
+    """Each task's last-recorded halted plan headings from runs/<id>/blockers.jsonl."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
+    found: dict[str, list[str]] = {}
+    for record in _jsonl_records(path):
+        task = record.get("task")
+        headings = record.get("plan_headings")
+        if isinstance(task, str) and isinstance(headings, list):
+            found[task] = [h for h in headings if isinstance(h, str)]
+    return found
+
+
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
     root = store.resolve_root(root)
     if name not in ARTIFACT_KEYS:
@@ -343,6 +361,29 @@ def record_gate(gate_id: str, decision: str, response: str, root: Path | None = 
 
 
 _OPTION_LABEL = re.compile(r"^\(([a-z0-9]+)\)")
+
+
+def _blocked_story_headings(state: State, task_id: str, root: Path) -> list[str]:
+    """The recorded dev plan's headings that serve `task_id` (SK-102).
+
+    Best-effort by design: no recorded dev_plan, a recorded path that has since
+    vanished, or a plan that cannot be decoded all return []. A blocker is the more
+    important record of the two - refusing to write one because the plan moved would
+    trade the escalation for the annotation.
+
+    These are the story's headings, not its UNRUN headings: state tracks stories, so
+    nothing here knows where the drain stopped. Gate 3 reads this as "the blocker
+    halted a story the plan spends these headings on".
+    """
+    plan = state.artifacts.get("dev_plan")
+    if not plan:
+        return []
+    plan_path = root / plan
+    try:
+        text = plan_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return headings_for_story(text, task_id, story_prefix=config.load_story_id_prefix(root))
 
 
 def record_blocker(
@@ -382,6 +423,7 @@ def record_blocker(
     if task is None:
         raise StateError(f"no task {task_id!r} in state.json - a blocker must attach to a known task")
 
+    plan_headings = _blocked_story_headings(state, task_id, root)
     blocker = Blocker(task=task_id, kind=kind, found=found, options=list(options), recommend=recommend)
     blockers_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "blockers.jsonl"
     store.append_jsonl(  # trail FIRST
@@ -392,6 +434,7 @@ def record_blocker(
             "found": blocker.found,
             "options": list(blocker.options),
             "recommend": blocker.recommend,
+            "plan_headings": plan_headings,  # SK-102: trail only; the schema does not move
             "at": store.now_utc_iso(),
         },
     )
