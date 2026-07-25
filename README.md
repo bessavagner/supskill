@@ -103,11 +103,14 @@ The state spine is the only part of an agentic system that can be proven correct
 
 ```console
 $ uv run pytest -q
-........................................................................ [ 28%]
-........................................................................ [ 57%]
-........................................................................ [ 86%]
-...................................                                      [100%]
-314 passed in 0.58s
+........................................................................ [ 14%]
+........................................................................ [ 29%]
+........................................................................ [ 44%]
+........................................................................ [ 59%]
+........................................................................ [ 74%]
+........................................................................ [ 89%]
+.....................................................                    [100%]
+485 passed in 1.86s
 ```
 
 No LLM calls. No network. No subagents. No flake. The suite proves the gates cannot be skipped, and it runs faster than you can read this sentence.
@@ -122,7 +125,7 @@ Requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/).
 git clone https://github.com/bessavagner/supskill.git
 cd supskill
 uv sync
-uv run pytest -q          # 431 passing, offline, <2s
+uv run pytest -q          # 485 passing, offline, <2s
 ```
 
 Install as a Claude Code plugin:
