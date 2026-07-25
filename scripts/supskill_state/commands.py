@@ -14,6 +14,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from . import blockers as blockers_view
 from . import config, store
 from .errors import StateError
 from .model import (
@@ -27,6 +28,7 @@ from .model import (
     State,
     Task,
     TaskStatus,
+    blocker_to_dict,
     loads_state,
     parse_task_status,
     state_to_dict,
@@ -219,45 +221,91 @@ def render_show(root: Path | None = None) -> str:
     )
     lines.append(f"tasks: {len(state.tasks)} total" + (f" - {by_status}" if by_status else ""))
 
-    if state.blockers:
+    open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
+    notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+
+    if open_blockers:
         lines.append("open blockers:")
-        for blocker in state.blockers:
+        for blocker in open_blockers:
             lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
             for option in blocker.options:
                 lines.append(f"      {option}")
             lines.append(f"    recommend: {blocker.recommend}")
     else:
         lines.append("open blockers: none")
+
+    if resolved_blockers:
+        lines.append("resolved blockers:")
+        for blocker in resolved_blockers:
+            lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
+            status, note = notes.get(blocker.task, ("", None))
+            lines.append(f"    resolved by: {blocker.task} -> {status}")
+            if note:
+                lines.append(f'    note: "{note}"')
     return "\n".join(lines) + "\n"
 
 
 def render_show_json(root: Path | None = None) -> str:
-    """The resume read-contract: the full state as JSON.
+    """The resume read-contract: the full state as JSON, plus a `derived` view.
 
     The conductor's dispatch consumes this instead of parsing state.json
     itself - the schema stays the CLI's concern, never skill prose's.
+
+    `derived` is computed at read time and never written back: state.json has no
+    such key and gains none (SK-103). Everything under it is a function of the
+    state above it, so a reader that ignores `derived` still sees the whole truth.
     """
     root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
-    return json.dumps(state_to_dict(state), indent=2) + "\n"
+    payload = state_to_dict(state)
+    open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
+    payload["derived"] = {
+        "blockers": {
+            "open": [blocker_to_dict(b) for b in open_blockers],
+            "resolved": [blocker_to_dict(b) for b in resolved_blockers],
+        }
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 
-def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
-    gates_file = store.gates_path(root)
-    responses: dict[str, str] = {}
-    if not gates_file.exists():
-        return responses
-    for line in gates_file.read_text(encoding="utf-8").splitlines():
+def _jsonl_records(path: Path):
+    """Every well-formed record in an append-only trail, in file order.
+
+    A missing file yields nothing. A blank line is skipped, and so is a crash-torn or
+    malformed tail: these trails are fsync'd appends, but a process killed mid-write
+    can still leave a partial final line, and a torn tail must never take `show` down.
+    """
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
-            continue  # a crash-torn tail must not take down show; skip it
+            continue
+        if isinstance(record, dict):
+            yield record
+
+
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    responses: dict[str, str] = {}
+    for record in _jsonl_records(store.gates_path(root)):
         key = GATE_KEYS.get(record.get("gate"))
         if key is not None:
             responses[key] = record.get("response", "")
     return responses
+
+
+def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:
+    """Each task's last recorded (status, note) from runs/<id>/tasks.jsonl."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "tasks.jsonl"
+    notes: dict[str, tuple[str, str | None]] = {}
+    for record in _jsonl_records(path):
+        task = record.get("task")
+        if isinstance(task, str):
+            notes[task] = (record.get("status", ""), record.get("note"))
+    return notes
 
 
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:

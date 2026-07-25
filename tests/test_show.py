@@ -101,9 +101,14 @@ def test_show_marks_missing_backlog_with_a_dash(tmp_path):
 
 
 def test_show_json_round_trips_against_the_state_file(tmp_path):
+    """SK-103: `derived` is a read-time addition on top of the state round-trip."""
     _state_with_activity(tmp_path)
-    output = render_show_json(tmp_path)
-    assert json.loads(output) == json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    output = json.loads(render_show_json(tmp_path))
+    on_disk = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
+    derived = output.pop("derived")
+    assert output == on_disk
+    assert "derived" not in on_disk
+    assert set(derived["blockers"]) == {"open", "resolved"}
 
 
 def test_cli_show_json(tmp_path, monkeypatch, capsys):

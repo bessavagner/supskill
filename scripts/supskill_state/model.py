@@ -264,6 +264,17 @@ def state_from_dict(raw: dict) -> State:
     )
 
 
+def blocker_to_dict(blocker: Blocker) -> dict:
+    """The inverse of blocker_from_dict. One serializer, used by state and by `show`."""
+    return {
+        "task": blocker.task,
+        "kind": blocker.kind,
+        "found": blocker.found,
+        "options": list(blocker.options),
+        "recommend": blocker.recommend,
+    }
+
+
 def state_to_dict(state: State) -> dict:
     return {
         "schema": state.schema,
@@ -283,16 +294,7 @@ def state_to_dict(state: State) -> dict:
             {"id": t.id, "seam": t.seam, "provable": t.provable, "status": t.status.value}
             for t in state.tasks
         ],
-        "blockers": [
-            {
-                "task": b.task,
-                "kind": b.kind,
-                "found": b.found,
-                "options": list(b.options),
-                "recommend": b.recommend,
-            }
-            for b in state.blockers
-        ],
+        "blockers": [blocker_to_dict(b) for b in state.blockers],
     }
 
 
