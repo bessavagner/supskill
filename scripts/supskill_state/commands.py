@@ -621,6 +621,38 @@ def record_cost(
     )
 
 
+def record_package(
+    base: str,
+    head: str,
+    path: str,
+    *,
+    root: Path | None = None,
+) -> None:
+    """Record the review package EXECUTE just cut (SK-104).
+
+    Pure telemetry, the same shape as record_cost: state.json is read only to place
+    the trail file by sprint.id, and nothing is written back to it. What this buys is
+    the one fact REVIEW cannot otherwise have - EXECUTE and REVIEW are separate
+    `/supskill run` invocations, so the SHA the package covers has to survive on disk
+    or not at all (invariant 5).
+    """
+    root = store.resolve_root(root)
+    for flag, value in (("--base", base), ("--head", head), ("--path", path)):
+        if not (value or "").strip():
+            raise StateError(f"a review package record requires a non-empty {flag}")
+    state = store.load_state(store.state_path(root))
+    package_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "package.jsonl"
+    store.append_jsonl(
+        package_file,
+        {
+            "base": base.strip(),
+            "head": head.strip(),
+            "path": path.strip(),
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
 def record_review_finding(
     reviewer: str,
     severity: str,
