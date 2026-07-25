@@ -13,7 +13,7 @@
 - **No new `state.json` schema fields.** `SCHEMA_VERSION` stays `1` and `state_to_dict` / `state_from_dict` are untouched by Tasks 1–4. Derived facts are computed at read time; recorded facts go to `runs/<id>/*.jsonl`.
 - **Trail FIRST, state SECOND.** Any verb that writes both writes the append-only trail before `state.json`, per `commands.py`'s module docstring.
 - **No AI attribution** in commit messages (global user rule). No `Co-Authored-By`, no "Generated with".
-- **No mypy** — it is not installed. Lint is `uv run ruff check .` (100 cols); tests are `uv run pytest` and must stay offline.
+- **No mypy** — it is not installed. Lint is `uv run ruff check .`; tests are `uv run pytest` and must stay offline. **The line length is 120**, set by `pyproject.toml:23` — an earlier draft of this plan said 100, which is wrong. Do not reflow code to 100.
 - **Guard modules follow one shape:** pure check + `refusal()` string + thin `cli.py` verb + dedicated test + one `SKILL.md` sentence. `plan_guard.py`, `replan_guard.py` and `artifact_tracking.py` are the templates.
 - **No dead pure modules.** SK-055/SK-056 were filed as defects precisely because `review.py`'s `aggregate()` had no production caller. Every function this plan adds is wired to a real call site in the same task that creates it.
 - **supskill runs no git command that changes the operator's repo.** Read-only git (`rev-parse`, `ls-files`, `merge-base`) is fine; `git add`, `git commit`, branch creation are not.
