@@ -26,6 +26,7 @@
 |---|---|---|
 | `scripts/supskill_state/blockers.py` | create | Pure: partition blockers into open/resolved from their tasks' statuses (SK-103). |
 | `scripts/supskill_state/review_package.py` | create | Pure: is the recorded review package stale against current HEAD, plus its `refusal()` (SK-104). |
+| `scripts/supskill_state/model.py` | modify | Extract `blocker_to_dict` beside the existing `blocker_from_dict`, so state and `show` share one serializer. Pure refactor. |
 | `scripts/supskill_state/plan_coverage.py` | modify | Gains `headings_for_story` — the story→plan-heading lookup SK-102 records. |
 | `scripts/supskill_state/commands.py` | modify | `render_show`/`render_show_json` consume `blockers.py`; `record_blocker` records plan headings; `record_cost` gains `estimated`; new `record_package`. |
 | `scripts/supskill_state/cli.py` | modify | New `package` and `review-guard` verbs; `cost --estimated` flag. |
@@ -50,12 +51,15 @@
 
 **Files:**
 - Create: `scripts/supskill_state/blockers.py`
-- Modify: `scripts/supskill_state/commands.py` (`render_show`, `render_show_json`, plus a `_last_task_notes` helper)
+- Modify: `scripts/supskill_state/model.py` (extract `blocker_to_dict`; pure refactor)
+- Modify: `scripts/supskill_state/commands.py` (`render_show`, `render_show_json`, a `_jsonl_records` extraction, a `_last_task_notes` helper)
 - Test: `tests/test_blockers_resolved.py`
 
 **Interfaces:**
 - Consumes: `model.Blocker`, `model.Task`, `model.TaskStatus`.
 - Produces:
+  - `model.blocker_to_dict(blocker: Blocker) -> dict` — the one blocker serializer, used by `state_to_dict` and by `render_show_json`.
+  - `commands._jsonl_records(path: Path)` — generator over a trail's well-formed records; Task 2 reuses it.
   - `blockers.RESOLVING_STATUSES: frozenset[TaskStatus]`
   - `blockers.partition(blockers: list[Blocker], tasks: list[Task]) -> tuple[list[Blocker], list[Blocker]]` returning `(open_, resolved)`, each in the input's order.
   - `blockers.resolving_status(blocker: Blocker, tasks: list[Task]) -> TaskStatus | None` — the status that resolved it, or `None` if it is still open. Task 2 does not use this; Task 5's prose refers to it.
@@ -261,19 +265,21 @@ In `scripts/supskill_state/commands.py`, add `blockers` to the package imports a
 from . import blockers as blockers_view, config, store
 ```
 
-Add this helper immediately after `_last_gate_responses` (around line 260):
+This task adds the second reader of an append-only trail, and Task 2 adds a third.
+`_last_gate_responses` already carries the read-skip-torn-line loop; writing it out
+twice more is the duplication a reviewer would rightly flag. Extract the loop first,
+immediately above `_last_gate_responses`:
 
 ```python
-def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:
-    """Each task's last recorded (status, note) from runs/<id>/tasks.jsonl.
+def _jsonl_records(path: Path):
+    """Every well-formed record in an append-only trail, in file order.
 
-    Same shape as _last_gate_responses: a read-only convenience for `show`, and a
-    crash-torn tail is skipped rather than allowed to take the command down.
+    A missing file yields nothing. A blank line is skipped, and so is a crash-torn or
+    malformed tail: these trails are fsync'd appends, but a process killed mid-write
+    can still leave a partial final line, and a torn tail must never take `show` down.
     """
-    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "tasks.jsonl"
-    notes: dict[str, tuple[str, str | None]] = {}
     if not path.exists():
-        return notes
+        return
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -281,6 +287,31 @@ def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, 
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(record, dict):
+            yield record
+```
+
+Rewrite `_last_gate_responses`' body to use it, leaving its signature and behavior
+unchanged:
+
+```python
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    responses: dict[str, str] = {}
+    for record in _jsonl_records(store.gates_path(root)):
+        key = GATE_KEYS.get(record.get("gate"))
+        if key is not None:
+            responses[key] = record.get("response", "")
+    return responses
+```
+
+Then add the new reader directly after it:
+
+```python
+def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:
+    """Each task's last recorded (status, note) from runs/<id>/tasks.jsonl."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "tasks.jsonl"
+    notes: dict[str, tuple[str, str | None]] = {}
+    for record in _jsonl_records(path):
         task = record.get("task")
         if isinstance(task, str):
             notes[task] = (record.get("status", ""), record.get("note"))
@@ -335,14 +366,21 @@ def render_show_json(root: Path | None = None) -> str:
     open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
     payload["derived"] = {
         "blockers": {
-            "open": [_blocker_to_dict(b) for b in open_blockers],
-            "resolved": [_blocker_to_dict(b) for b in resolved_blockers],
+            "open": [blocker_to_dict(b) for b in open_blockers],
+            "resolved": [blocker_to_dict(b) for b in resolved_blockers],
         }
     }
     return json.dumps(payload, indent=2) + "\n"
+```
 
+`blocker_to_dict` does not exist yet, and must **not** be written a second time here —
+`model.state_to_dict` already serializes a blocker with exactly these five keys inline.
+Extract it in `model.py` so there is one serializer, mirroring the `blocker_from_dict`
+that already sits beside it:
 
-def _blocker_to_dict(blocker: Blocker) -> dict:
+```python
+def blocker_to_dict(blocker: Blocker) -> dict:
+    """The inverse of blocker_from_dict. One serializer, used by state and by `show`."""
     return {
         "task": blocker.task,
         "kind": blocker.kind,
@@ -351,6 +389,21 @@ def _blocker_to_dict(blocker: Blocker) -> dict:
         "recommend": blocker.recommend,
     }
 ```
+
+and collapse `state_to_dict`'s inline blocker list comprehension to use it:
+
+```python
+        "blockers": [blocker_to_dict(b) for b in state.blockers],
+```
+
+Then import it in `commands.py` alongside the other model imports:
+
+```python
+    blocker_to_dict,
+```
+
+This is a pure refactor — `state_to_dict`'s output is byte-identical, which
+`tests/test_model.py`'s existing round-trip tests already pin.
 
 - [ ] **Step 7: Run the full suite**
 
@@ -589,20 +642,14 @@ and add the key to the `store.append_jsonl` record — the trail only, never the
 
 In `commands.py`, add a helper next to `_last_task_notes`:
 
+Use the `_jsonl_records` helper Task 1 extracted — do not re-write the read loop:
+
 ```python
 def _blocker_plan_headings(root: Path | None, sprint_id: str) -> dict[str, list[str]]:
-    """Each task's last-recorded cancelled plan headings from runs/<id>/blockers.jsonl."""
+    """Each task's last-recorded halted plan headings from runs/<id>/blockers.jsonl."""
     path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
     found: dict[str, list[str]] = {}
-    if not path.exists():
-        return found
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for record in _jsonl_records(path):
         task = record.get("task")
         headings = record.get("plan_headings")
         if isinstance(task, str) and isinstance(headings, list):
