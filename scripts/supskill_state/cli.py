@@ -14,6 +14,7 @@ from . import (
     plan_guard,
     preflight,
     replan_guard,
+    review_package,
     store,
     worktree,
 )
@@ -41,6 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_commit_scope_guard(subparsers)
     _add_replan_guard(subparsers)
     _add_artifact_guard(subparsers)
+    _add_package(subparsers)
+    _add_review_guard(subparsers)
     _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
@@ -303,6 +306,63 @@ def _cmd_artifact_guard(args) -> int:
     return 0
 
 
+def _add_package(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "package",
+        help="record the review package EXECUTE just cut, so REVIEW can prove it is current",
+    )
+    sub.add_argument("--base", required=True, help="the package's base SHA (the merge-base)")
+    sub.add_argument("--head", required=True, help="HEAD at the moment the package was cut")
+    sub.add_argument("--path", required=True, help="where the diff was written, e.g. <scratch>/review-final.diff")
+    sub.add_argument(
+        "--dispatch-root",
+        dest="dispatch_root",
+        default=None,
+        help="where the package was cut, if not the state root (e.g. a worktree path); "
+             "review-guard rev-parses HEAD here instead of guessing",
+    )
+    sub.set_defaults(func=_cmd_package)
+
+
+def _cmd_package(args) -> int:
+    commands.record_package(args.base, args.head, args.path, dispatch_root=args.dispatch_root)
+    print(f"recorded review package: {args.base.strip()}..{args.head.strip()} -> {args.path.strip()}")
+    return 0
+
+
+def _add_review_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "review-guard",
+        help="is the recorded review package still this branch? exit 1 means refuse",
+    )
+    sub.add_argument(
+        "--dir",
+        default=None,
+        dest="root",
+        help="the repo root whose .supskill/ holds this sprint's state; default cwd",
+    )
+    sub.set_defaults(func=_cmd_review_guard)
+
+
+def _cmd_review_guard(args) -> int:
+    root = store.resolve_root(Path(args.root) if args.root else None)
+    state = store.load_state(store.state_path(root))
+    record = review_package.last_record(root, state.sprint.id)
+    if record is None:
+        print(review_package.missing_refusal(state.sprint.id), file=sys.stderr)
+        return 1
+    dispatch_root = review_package.dispatch_root_for(root, record)
+    if not (dispatch_root / str(record.get("path", ""))).exists():
+        print(review_package.missing_file_refusal(record, dispatch_root), file=sys.stderr)
+        return 1
+    current = review_package.git_head(str(dispatch_root))
+    if review_package.is_stale(str(record.get("head", "")), current):
+        print(review_package.refusal(record, current), file=sys.stderr)
+        return 1
+    print(f"review-guard: the recorded package matches HEAD ({current})")
+    return 0
+
+
 def _add_preflight(subparsers) -> None:
     sub = subparsers.add_parser(
         "preflight",
@@ -370,6 +430,12 @@ def _add_cost(subparsers) -> None:
     sub.add_argument("--tokens", required=True, type=int, help="the dispatch's reported subagent_tokens")
     sub.add_argument("--tool-uses", type=int, dest="tool_uses", help="the dispatch's reported tool_uses")
     sub.add_argument("--duration-ms", type=int, dest="duration_ms", help="the dispatch's reported duration_ms")
+    sub.add_argument(
+        "--estimated",
+        action="store_true",
+        help="this token count was estimated, not read from a dispatch's reported usage "
+             "(e.g. a mailbox teammate whose transcript the conductor cannot retrieve)",
+    )
     sub.set_defaults(func=_cmd_cost)
 
 
@@ -380,9 +446,11 @@ def _cmd_cost(args) -> int:
         label=args.label,
         tool_uses=args.tool_uses,
         duration_ms=args.duration_ms,
+        estimated=args.estimated,
     )
     where = f"{args.stage}/{args.label}" if args.label else args.stage
-    print(f"recorded cost: {where} tokens={args.tokens}")
+    marker = " (estimated)" if args.estimated else ""
+    print(f"recorded cost: {where} tokens={args.tokens}{marker}")
     return 0
 
 

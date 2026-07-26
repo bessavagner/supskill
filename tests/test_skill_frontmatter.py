@@ -4,13 +4,15 @@ Malformed frontmatter YAML still loads the skill but with NO description, so
 it never auto-triggers and only --debug shows why (contexts/02 SS1). This
 suite is the CI step that makes that silent failure mode loud, and pins the
 hard numbers: name <=64 kebab-case without reserved words, description
-non-empty <=1024, combined description + when_to_use <=1536, body <=515 lines.
+non-empty <=1024, combined description + when_to_use <=1536, body <=540 lines.
 
 The body budget is an anti-bloat guard, not a loader limit: 500 was Claude Code's
 own "keep SKILL.md under 500 lines" authoring tip (contexts/02), and the body sat
 at exactly 500 when SK-112's task-review file-handoff paragraph landed. The cap
-was raised to 515 as a decision rather than squeezing the paragraph out. Raise it
-again the same way - deliberately, never as a reflex to make a red test green.
+was raised to 515 as a decision rather than squeezing the paragraph out. Raised
+again to 540 for the Gate-3 group (SK-102/103/104/109): four checks, each needing
+a conductor sentence, against two lines of headroom. Raise it as a decision, and
+say here why - never by deleting prose that earns its place.
 
 The no-workflow-summary property is reviewer judgment, not regex (sprint risk
 table says so honestly); WORKFLOW_TOKENS below is only a tripwire for the
@@ -78,9 +80,9 @@ def test_argument_hint_names_the_verb(frontmatter):
     assert frontmatter["argument-hint"] == "run <sprint-id>"
 
 
-def test_body_stays_under_515_lines():
+def test_body_stays_under_540_lines():
     _, body = read_frontmatter_and_body()
-    assert len(body) <= 515
+    assert len(body) <= 540
 
 
 def test_invocation_model_reference_is_one_hop_from_the_skill():

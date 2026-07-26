@@ -101,3 +101,21 @@ def validate_plan_coverage(plan_text: str, story_ids: list[str], story_prefix: s
         if story not in named:
             failures.append(f"{story}: no plan task heading names it - the plan drops this story")
     return failures
+
+
+def headings_for_story(plan_text: str, story: str, story_prefix: str = "SK") -> list[str]:
+    """Every '### Task N ...' heading that names `story`, in document order (SK-102).
+
+    Fence-awareness is inherited from plan_task_headings: a quoted example inside a
+    code fence is not a real task and does not appear here either.
+
+    This answers "which plan headings serve this story", NOT "which of them already
+    ran" - the spine tracks stories, not headings, and nothing in it knows where a
+    drain stopped. A caller that needs the narrower claim does not get it from here.
+    """
+    pattern = _story_id_pattern(story_prefix)
+    return [
+        heading
+        for heading in plan_task_headings(plan_text)
+        if story in pattern.findall(heading)
+    ]

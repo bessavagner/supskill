@@ -14,6 +14,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from . import blockers as blockers_view
 from . import config, store
 from .errors import StateError
 from .model import (
@@ -27,11 +28,12 @@ from .model import (
     State,
     Task,
     TaskStatus,
+    blocker_to_dict,
     loads_state,
     parse_task_status,
     state_to_dict,
 )
-from .plan_coverage import validate_plan_coverage
+from .plan_coverage import headings_for_story, validate_plan_coverage
 from .proofs import parse_proof_lines
 from .review import aggregate, parse_confidence, parse_reviewer, parse_severity
 from .scratch import derive_scratch, normalize_sprint_id
@@ -219,45 +221,157 @@ def render_show(root: Path | None = None) -> str:
     )
     lines.append(f"tasks: {len(state.tasks)} total" + (f" - {by_status}" if by_status else ""))
 
-    if state.blockers:
+    open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
+    notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+    headings = _blocker_plan_headings(root, state.sprint.id) if open_blockers else {}
+
+    if open_blockers:
         lines.append("open blockers:")
-        for blocker in state.blockers:
+        for blocker in open_blockers:
             lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
             for option in blocker.options:
                 lines.append(f"      {option}")
             lines.append(f"    recommend: {blocker.recommend}")
+            halted = headings.get(blocker.task, [])
+            if halted:
+                lines.append("    plan headings this blocker halted:")
+                for heading in halted:
+                    lines.append(f"      {heading}")
     else:
         lines.append("open blockers: none")
+
+    if resolved_blockers:
+        lines.append("resolved blockers:")
+        for blocker in resolved_blockers:
+            lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
+            # Minor 5: the status printed here is read through the SAME function
+            # blockers_view.partition used to decide this blocker belongs in `resolved`
+            # at all - not a second, independent read of tasks.jsonl that could disagree.
+            status = blockers_view.resolving_status(blocker, state.tasks)
+            _, note = notes.get(blocker.task, ("", None))
+            lines.append(f"    resolved by: {blocker.task} -> {status.value if status else '?'}")
+            if note:
+                lines.append(f'    note: "{note}"')
     return "\n".join(lines) + "\n"
 
 
 def render_show_json(root: Path | None = None) -> str:
-    """The resume read-contract: the full state as JSON.
+    """The resume read-contract: the full state as JSON, plus a `derived` view.
 
     The conductor's dispatch consumes this instead of parsing state.json
     itself - the schema stays the CLI's concern, never skill prose's.
+
+    `derived` is computed at read time and never written back: state.json has no
+    such key and gains none (SK-103). Everything under it is a function of the
+    state above it, so a reader that ignores `derived` still sees the whole truth.
     """
     root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
-    return json.dumps(state_to_dict(state), indent=2) + "\n"
+    payload = state_to_dict(state)
+    open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
+    headings = (
+        _blocker_plan_headings(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
+    )
+    notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+    payload["derived"] = {
+        "blockers": {
+            "open": [_blocker_view(b, headings, state.tasks, notes) for b in open_blockers],
+            "resolved": [_blocker_view(b, headings, state.tasks, notes) for b in resolved_blockers],
+        }
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 
-def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
-    gates_file = store.gates_path(root)
-    responses: dict[str, str] = {}
-    if not gates_file.exists():
-        return responses
-    for line in gates_file.read_text(encoding="utf-8").splitlines():
+def _blocker_view(
+    blocker: Blocker,
+    headings: dict[str, list[str]],
+    tasks: list[Task],
+    notes: dict[str, tuple[str, str | None]],
+) -> dict:
+    """A `derived.blockers.*` entry: `blocker_to_dict` plus the plan headings it
+    halted (SK-102) and, once resolved, the evidence of how (Important 3, final
+    review of feat/e9-gate3-inputs).
+
+    Before this, `show --json`'s resolved blockers carried `options`/`recommend`/
+    `plan_headings` but nothing saying WHICH status resolved them or what the
+    operator noted - the very reconstruction SK-103 was filed to remove, still
+    required on the JSON path SKILL.md:510 actually names.
+
+    `resolved_by` is read through `blockers.resolving_status` - the SAME function
+    `blockers_view.partition` used to decide this blocker belongs in `open` or
+    `resolved` in the first place (Minor 5): a second, independent read of the
+    trail could disagree with that decision and report a status the blocker was
+    never actually partitioned for. It is `None` for an open blocker, by
+    construction - `resolving_status` returns `None` for exactly that case.
+
+    `note` is the trail's own free-text field and has no such second source; it
+    stays a `_last_task_notes` read, and is only surfaced once `resolved_by` is
+    set - an open blocker's task can carry an unrelated non-resolving status note
+    (e.g. PARKED) in tasks.jsonl, and that must not leak in as though it settled
+    this blocker. `blocker_to_dict` itself is the *state* serializer and stays
+    unchanged; everything added here is read-time only (SK-103): state.json
+    gains no such key.
+    """
+    status = blockers_view.resolving_status(blocker, tasks)
+    _, note = notes.get(blocker.task, (None, None)) if status else (None, None)
+    return {
+        **blocker_to_dict(blocker),
+        "plan_headings": headings.get(blocker.task, []),
+        "resolved_by": status.value if status else None,
+        "note": note,
+    }
+
+
+def _jsonl_records(path: Path):
+    """Every well-formed record in an append-only trail, in file order.
+
+    A missing file yields nothing. A blank line is skipped, and so is a crash-torn or
+    malformed tail: these trails are fsync'd appends, but a process killed mid-write
+    can still leave a partial final line, and a torn tail must never take `show` down.
+    """
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
-            continue  # a crash-torn tail must not take down show; skip it
+            continue
+        if isinstance(record, dict):
+            yield record
+
+
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    responses: dict[str, str] = {}
+    for record in _jsonl_records(store.gates_path(root)):
         key = GATE_KEYS.get(record.get("gate"))
         if key is not None:
             responses[key] = record.get("response", "")
     return responses
+
+
+def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:
+    """Each task's last recorded (status, note) from runs/<id>/tasks.jsonl."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "tasks.jsonl"
+    notes: dict[str, tuple[str, str | None]] = {}
+    for record in _jsonl_records(path):
+        task = record.get("task")
+        if isinstance(task, str):
+            notes[task] = (record.get("status", ""), record.get("note"))
+    return notes
+
+
+def _blocker_plan_headings(root: Path | None, sprint_id: str) -> dict[str, list[str]]:
+    """Each task's last-recorded halted plan headings from runs/<id>/blockers.jsonl."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
+    found: dict[str, list[str]] = {}
+    for record in _jsonl_records(path):
+        task = record.get("task")
+        headings = record.get("plan_headings")
+        if isinstance(task, str) and isinstance(headings, list):
+            found[task] = [h for h in headings if isinstance(h, str)]
+    return found
 
 
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
@@ -297,6 +411,29 @@ def record_gate(gate_id: str, decision: str, response: str, root: Path | None = 
 _OPTION_LABEL = re.compile(r"^\(([a-z0-9]+)\)")
 
 
+def _blocked_story_headings(state: State, task_id: str, root: Path) -> list[str]:
+    """The recorded dev plan's headings that serve `task_id` (SK-102).
+
+    Best-effort by design: no recorded dev_plan, a recorded path that has since
+    vanished, or a plan that cannot be decoded all return []. A blocker is the more
+    important record of the two - refusing to write one because the plan moved would
+    trade the escalation for the annotation.
+
+    These are the story's headings, not its UNRUN headings: state tracks stories, so
+    nothing here knows where the drain stopped. Gate 3 reads this as "the blocker
+    halted a story the plan spends these headings on".
+    """
+    plan = state.artifacts.get("dev_plan")
+    if not plan:
+        return []
+    plan_path = root / plan
+    try:
+        text = plan_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return headings_for_story(text, task_id, story_prefix=config.load_story_id_prefix(root))
+
+
 def record_blocker(
     task_id: str,
     kind: str,
@@ -334,6 +471,7 @@ def record_blocker(
     if task is None:
         raise StateError(f"no task {task_id!r} in state.json - a blocker must attach to a known task")
 
+    plan_headings = _blocked_story_headings(state, task_id, root)
     blocker = Blocker(task=task_id, kind=kind, found=found, options=list(options), recommend=recommend)
     blockers_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "blockers.jsonl"
     store.append_jsonl(  # trail FIRST
@@ -344,6 +482,7 @@ def record_blocker(
             "found": blocker.found,
             "options": list(blocker.options),
             "recommend": blocker.recommend,
+            "plan_headings": plan_headings,  # SK-102: trail only; the schema does not move
             "at": store.now_utc_iso(),
         },
     )
@@ -490,6 +629,7 @@ def record_cost(
     label: str | None = None,
     tool_uses: int | None = None,
     duration_ms: int | None = None,
+    estimated: bool = False,
     root: Path | None = None,
 ) -> None:
     """Record one subagent dispatch's usage against the running sprint.
@@ -500,6 +640,13 @@ def record_cost(
     effect, so supskill's own open cost questions (PAR's doubled review cost,
     whether a SCOPE pass earns its keep) get answered from real numbers
     instead of estimation.
+
+    SK-109: `estimated` marks a row whose token count the conductor could not
+    retrieve. PAR's reviewers run as mailbox teammates and their transcripts are
+    not readable from the controller, so those rows were guessed at 70k and filed
+    beside measured ones with nothing to tell them apart. The key is written on
+    EVERY row, measured included - a row that predates this field has no key at
+    all, and that difference is the point.
     """
     root = store.resolve_root(root)
     try:
@@ -525,6 +672,47 @@ def record_cost(
             "tokens": tokens,
             "tool_uses": tool_uses,
             "duration_ms": duration_ms,
+            "estimated": estimated,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
+def record_package(
+    base: str,
+    head: str,
+    path: str,
+    *,
+    dispatch_root: str | None = None,
+    root: Path | None = None,
+) -> None:
+    """Record the review package EXECUTE just cut (SK-104).
+
+    Pure telemetry, the same shape as record_cost: state.json is read only to place
+    the trail file by sprint.id, and nothing is written back to it. What this buys is
+    the one fact REVIEW cannot otherwise have - EXECUTE and REVIEW are separate
+    `/supskill run` invocations, so the SHA the package covers has to survive on disk
+    or not at all (invariant 5).
+
+    `dispatch_root` is optional: EXECUTE isolates into a worktree (SK-111), and when it
+    does, the package is cut there - not at the state root `.supskill/` never moves
+    from. Recording it here is what lets `review-guard` rev-parse the right repo instead
+    of inferring one; omitted, it means the dispatch root and the state root are the
+    same (the non-worktree case), and the guard falls back accordingly.
+    """
+    root = store.resolve_root(root)
+    for flag, value in (("--base", base), ("--head", head), ("--path", path)):
+        if not (value or "").strip():
+            raise StateError(f"a review package record requires a non-empty {flag}")
+    state = store.load_state(store.state_path(root))
+    package_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "package.jsonl"
+    store.append_jsonl(
+        package_file,
+        {
+            "base": base.strip(),
+            "head": head.strip(),
+            "path": path.strip(),
+            "dispatch_root": (dispatch_root or "").strip() or None,
             "at": store.now_utc_iso(),
         },
     )

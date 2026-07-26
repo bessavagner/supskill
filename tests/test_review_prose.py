@@ -203,3 +203,36 @@ def test_propose_section_applies_regardless_of_which_shape_closed_the_sprint():
     section = propose_section()
     assert "fork" in section.lower() or "Shape 3" in section
     assert "refus" in section.lower()
+
+
+# --- final review of feat/e9-gate3-inputs: Important 4 (four instructions with zero
+# prose tripwires - this branch's own Critical was a prose/code mismatch that shipped
+# without one, so these pin the checks a reviewer would otherwise re-verify by hand
+# every time SKILL.md is touched) ---
+
+
+def test_review_guard_runs_before_par_is_dispatched():
+    """A guard named after the dispatch it is meant to gate is a guard that never runs."""
+    section = review_section()
+    assert "supskill-state review-guard" in section
+    assert section.index("review-guard") < section.index("PAR:")
+
+
+def test_the_review_stage_marks_an_estimated_reviewer_cost():
+    section = review_section()
+    assert "--estimated" in section
+
+
+def test_the_package_invocation_always_carries_dispatch_root():
+    text = SKILL.read_text(encoding="utf-8")
+    package_lines = [
+        line for line in text.splitlines() if "supskill-state package --base" in line
+    ]
+    assert package_lines, "no `supskill-state package --base ...` invocation found in SKILL.md"
+    assert all("--dispatch-root" in line for line in package_lines)
+
+
+def test_gate_3_reads_derived_blockers_and_plan_headings():
+    section = gate3_section()
+    assert "derived.blockers.open" in section
+    assert "plan_headings" in section
