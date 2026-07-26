@@ -105,6 +105,37 @@ def last_record(root: Path, sprint_id: str) -> dict | None:
     return found
 
 
+def missing_file_refusal(record: dict, dispatch_root: Path) -> str:
+    """What the conductor reports when the recorded package names a diff that is
+    not on disk (SK-104 Critical fix, final review of feat/e9-gate3-inputs).
+
+    `_archive_existing` moves `state.json` and `gates.jsonl` into `runs/<id>/archive-N/`
+    on `init --archive`, but leaves `runs/<id>/package.jsonl` where it is. Reuse the same
+    sprint id across an archive and `last_record` reads the PREVIOUS run's package as
+    though it belonged to this one - and that record's SHA can still "match HEAD" if
+    nothing has committed since, the exact false pass this guard exists to prevent. A
+    package whose diff is gone cannot be the package under review, whatever its recorded
+    SHA says, so this is checked before staleness rather than instead of it.
+    """
+    path = str(record.get("path", "<scratch>/review-final.diff"))
+    return (
+        f"the recorded review package names a diff that is not on disk: {path}\n"
+        f"  looked in: {dispatch_root}\n"
+        "A package whose diff is gone cannot be the package under review, whatever its "
+        "recorded SHA says.\n"
+        "The likely cause is a sprint id reused across `init --archive`: the archive moves "
+        "state.json and gates.jsonl into runs/<id>/archive-N/, but package.jsonl is not "
+        "part of that move, so a previous run's last-recorded package survives under the "
+        "same id and is read as though it belonged to this one.\n"
+        "Cut the package again from the current dispatch root, record it, then re-run this "
+        "stage:\n"
+        f"  review-package $(git -C <dispatch-root> merge-base <default-branch> HEAD) HEAD {path}\n"
+        f"  supskill-state package --base $(git -C <dispatch-root> merge-base <default-branch> HEAD) "
+        f"--head $(git -C <dispatch-root> rev-parse HEAD) --path {path} --dispatch-root <dispatch-root>\n"
+        "Nothing was dispatched and no gate was called: G3 is still open."
+    )
+
+
 def missing_refusal(sprint_id: str) -> str:
     """What the conductor reports when EXECUTE recorded no package at all."""
     return (

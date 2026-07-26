@@ -127,10 +127,20 @@ def test_git_head_raises_rather_than_guessing_outside_a_repo(tmp_path):
         git_head(str(tmp_path))
 
 
+def _write_diff(root, rel_path="scratch/review-final.diff"):
+    """Write a real file at `rel_path`, so a guard call is not confounded by the
+    Critical-1 file-existence check when the test means to exercise something else."""
+    diff = root / rel_path
+    diff.parent.mkdir(parents=True, exist_ok=True)
+    diff.write_text("diff\n", encoding="utf-8")
+    return diff
+
+
 def test_guard_passes_when_head_has_not_moved(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _repo(tmp_path)
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    _write_diff(tmp_path)
     head = git_head(str(tmp_path))
     record_package("a1b2c3d", head, "scratch/review-final.diff", root=tmp_path)
     assert main(["review-guard"]) == 0
@@ -141,6 +151,7 @@ def test_guard_refuses_when_head_moved_past_the_package(tmp_path, monkeypatch, c
     monkeypatch.chdir(tmp_path)
     _repo(tmp_path)
     init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    _write_diff(tmp_path)
     record_package("a1b2c3d", git_head(str(tmp_path)), "scratch/review-final.diff", root=tmp_path)
     (tmp_path / "a.txt").write_text("two\n", encoding="utf-8")
     _git(tmp_path, "commit", "-aqm", "two")
@@ -272,10 +283,42 @@ def test_guard_rev_parses_the_recorded_dispatch_root_not_the_state_root(tmp_path
     _git(worktree, "commit", "-aqm", "two")
     worktree_head = git_head(str(worktree))
     assert git_head(str(tmp_path)) != worktree_head  # the state root's own HEAD never moved
+    _write_diff(worktree)
     record_package("a1b2c3d", worktree_head, "scratch/review-final.diff",
                     dispatch_root=str(worktree), root=tmp_path)
     assert main(["review-guard"]) == 0
     assert "matches HEAD" in capsys.readouterr().out
+
+
+# --- final review of feat/e9-gate3-inputs: Critical 1 (reused sprint id false-passes) ---
+
+
+def test_guard_refuses_when_a_reused_sprint_id_outlives_its_package(tmp_path, monkeypatch, capsys):
+    """`_archive_existing` moves state.json and gates.jsonl into runs/<id>/archive-N/ on
+    `init --archive`, but leaves runs/<id>/package.jsonl where it is. Reusing a sprint id
+    is exactly what SKILL.md:130 tells the operator to do (`init <sprint-id> --archive`),
+    and it must not let a previous run's package.jsonl pass as though it belonged to a run
+    that recorded nothing - the false pass this guard's entire purpose is preventing.
+
+    Reproduces the review's own finding: `review-guard` matched HEAD on a package whose
+    diff was gone, on a run that had recorded nothing at all.
+    """
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    diff = tmp_path / "scratch" / "review-final.diff"
+    diff.parent.mkdir(parents=True)
+    diff.write_text("diff\n", encoding="utf-8")
+    record_package("a1b2c3d", git_head(str(tmp_path)), "scratch/review-final.diff", root=tmp_path)
+    assert main(["review-guard"]) == 0  # sanity: the first run's own package is genuinely current
+
+    diff.unlink()  # the first run's diff does not survive into the second (scratch is ephemeral)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path, archive=True)  # a new run; records nothing
+    assert (runs_dir(tmp_path) / "s1" / "package.jsonl").exists()  # the old record survived the archive
+    assert last_record(tmp_path, "s1") is not None  # and review-guard can still see it
+
+    assert main(["review-guard"]) == 1
+    assert "scratch/review-final.diff" in capsys.readouterr().err
 
 
 def test_guard_resolves_a_relative_dispatch_root_against_the_state_root(tmp_path, monkeypatch, capsys):
@@ -287,6 +330,7 @@ def test_guard_resolves_a_relative_dispatch_root_against_the_state_root(tmp_path
     (worktree / "a.txt").write_text("two\n", encoding="utf-8")
     _git(worktree, "commit", "-aqm", "two")
     worktree_head = git_head(str(worktree))
+    _write_diff(worktree)
     record_package("a1b2c3d", worktree_head, "scratch/review-final.diff",
                     dispatch_root=".worktrees/s1", root=tmp_path)
     assert main(["review-guard"]) == 0

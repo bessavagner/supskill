@@ -352,6 +352,9 @@ def _cmd_review_guard(args) -> int:
         print(review_package.missing_refusal(state.sprint.id), file=sys.stderr)
         return 1
     dispatch_root = review_package.dispatch_root_for(root, record)
+    if not (dispatch_root / str(record.get("path", ""))).exists():
+        print(review_package.missing_file_refusal(record, dispatch_root), file=sys.stderr)
+        return 1
     current = review_package.git_head(str(dispatch_root))
     if review_package.is_stale(str(record.get("head", "")), current):
         print(review_package.refusal(record, current), file=sys.stderr)
