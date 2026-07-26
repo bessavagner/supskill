@@ -113,3 +113,51 @@ def test_show_json_never_writes_derived_back_into_state(tmp_path, monkeypatch):
     render_show_json(root=tmp_path)
     on_disk = json.loads(state_path(tmp_path).read_text(encoding="utf-8"))
     assert "derived" not in on_disk
+
+
+# --- final review of feat/e9-gate3-inputs: Important 3 (resolved blockers carried no
+# resolution evidence in show --json, the path SKILL.md:510 actually reads) ---
+
+
+def test_show_json_carries_the_resolution_evidence_for_a_settled_blocker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_blocked_sprint(tmp_path)
+    record_task_status("SK-052", "DONE", note="operator corrected AGENTS.md out of band", root=tmp_path)
+    payload = json.loads(render_show_json(root=tmp_path))
+    resolved = payload["derived"]["blockers"]["resolved"][0]
+    assert resolved["resolved_by"] == "DONE"
+    assert resolved["note"] == "operator corrected AGENTS.md out of band"
+
+
+def test_show_json_null_resolution_for_an_open_blocker(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _init_blocked_sprint(tmp_path)
+    payload = json.loads(render_show_json(root=tmp_path))
+    open_blocker = payload["derived"]["blockers"]["open"][0]
+    assert open_blocker["resolved_by"] is None
+    assert open_blocker["note"] is None
+
+
+def test_show_json_resolved_by_agrees_with_the_status_that_partitioned_it(tmp_path, monkeypatch):
+    """Minor 5, applied to the JSON view too: `resolved_by` must come from the same
+    `resolving_status` call `partition` used, not a second independent trail read that
+    could disagree with it."""
+    monkeypatch.chdir(tmp_path)
+    _init_blocked_sprint(tmp_path)
+    record_task_status("SK-052", "DONE_WITH_CONCERNS", note="shipped with a caveat", root=tmp_path)
+    payload = json.loads(render_show_json(root=tmp_path))
+    resolved = payload["derived"]["blockers"]["resolved"][0]
+    assert resolved["resolved_by"] == "DONE_WITH_CONCERNS"
+
+
+def test_a_non_resolving_note_on_an_open_blockers_task_does_not_leak_in(tmp_path, monkeypatch):
+    """A blocker's task can carry a PARKED note in tasks.jsonl without being resolved -
+    that note must not surface as though it settled the blocker (it stays open)."""
+    monkeypatch.chdir(tmp_path)
+    _init_blocked_sprint(tmp_path)
+    record_task_status("SK-052", "PARKED", note="parked pending the operator", root=tmp_path)
+    payload = json.loads(render_show_json(root=tmp_path))
+    assert payload["derived"]["blockers"]["resolved"] == []
+    open_blocker = payload["derived"]["blockers"]["open"][0]
+    assert open_blocker["resolved_by"] is None
+    assert open_blocker["note"] is None

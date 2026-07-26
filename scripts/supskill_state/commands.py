@@ -244,8 +244,12 @@ def render_show(root: Path | None = None) -> str:
         lines.append("resolved blockers:")
         for blocker in resolved_blockers:
             lines.append(f"  {blocker.task} [{blocker.kind}] {blocker.found}")
-            status, note = notes.get(blocker.task, ("", None))
-            lines.append(f"    resolved by: {blocker.task} -> {status}")
+            # Minor 5: the status printed here is read through the SAME function
+            # blockers_view.partition used to decide this blocker belongs in `resolved`
+            # at all - not a second, independent read of tasks.jsonl that could disagree.
+            status = blockers_view.resolving_status(blocker, state.tasks)
+            _, note = notes.get(blocker.task, ("", None))
+            lines.append(f"    resolved by: {blocker.task} -> {status.value if status else '?'}")
             if note:
                 lines.append(f'    note: "{note}"')
     return "\n".join(lines) + "\n"
@@ -268,22 +272,54 @@ def render_show_json(root: Path | None = None) -> str:
     headings = (
         _blocker_plan_headings(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
     )
+    notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
     payload["derived"] = {
         "blockers": {
-            "open": [_blocker_view(b, headings) for b in open_blockers],
-            "resolved": [_blocker_view(b, headings) for b in resolved_blockers],
+            "open": [_blocker_view(b, headings, state.tasks, notes) for b in open_blockers],
+            "resolved": [_blocker_view(b, headings, state.tasks, notes) for b in resolved_blockers],
         }
     }
     return json.dumps(payload, indent=2) + "\n"
 
 
-def _blocker_view(blocker: Blocker, headings: dict[str, list[str]]) -> dict:
+def _blocker_view(
+    blocker: Blocker,
+    headings: dict[str, list[str]],
+    tasks: list[Task],
+    notes: dict[str, tuple[str, str | None]],
+) -> dict:
     """A `derived.blockers.*` entry: `blocker_to_dict` plus the plan headings it
-    halted (SK-102), read from the same trail `render_show`'s text output already
-    uses. `blocker_to_dict` itself is the *state* serializer and stays unchanged -
-    `plan_headings` is read-time only, exactly like the `open`/`resolved` split
-    above it (SK-103): state.json gains no such key."""
-    return {**blocker_to_dict(blocker), "plan_headings": headings.get(blocker.task, [])}
+    halted (SK-102) and, once resolved, the evidence of how (Important 3, final
+    review of feat/e9-gate3-inputs).
+
+    Before this, `show --json`'s resolved blockers carried `options`/`recommend`/
+    `plan_headings` but nothing saying WHICH status resolved them or what the
+    operator noted - the very reconstruction SK-103 was filed to remove, still
+    required on the JSON path SKILL.md:510 actually names.
+
+    `resolved_by` is read through `blockers.resolving_status` - the SAME function
+    `blockers_view.partition` used to decide this blocker belongs in `open` or
+    `resolved` in the first place (Minor 5): a second, independent read of the
+    trail could disagree with that decision and report a status the blocker was
+    never actually partitioned for. It is `None` for an open blocker, by
+    construction - `resolving_status` returns `None` for exactly that case.
+
+    `note` is the trail's own free-text field and has no such second source; it
+    stays a `_last_task_notes` read, and is only surfaced once `resolved_by` is
+    set - an open blocker's task can carry an unrelated non-resolving status note
+    (e.g. PARKED) in tasks.jsonl, and that must not leak in as though it settled
+    this blocker. `blocker_to_dict` itself is the *state* serializer and stays
+    unchanged; everything added here is read-time only (SK-103): state.json
+    gains no such key.
+    """
+    status = blockers_view.resolving_status(blocker, tasks)
+    _, note = notes.get(blocker.task, (None, None)) if status else (None, None)
+    return {
+        **blocker_to_dict(blocker),
+        "plan_headings": headings.get(blocker.task, []),
+        "resolved_by": status.value if status else None,
+        "note": note,
+    }
 
 
 def _jsonl_records(path: Path):
