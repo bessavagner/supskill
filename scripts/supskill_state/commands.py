@@ -265,13 +265,25 @@ def render_show_json(root: Path | None = None) -> str:
     state = store.load_state(store.state_path(root))
     payload = state_to_dict(state)
     open_blockers, resolved_blockers = blockers_view.partition(state.blockers, state.tasks)
+    headings = (
+        _blocker_plan_headings(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
+    )
     payload["derived"] = {
         "blockers": {
-            "open": [blocker_to_dict(b) for b in open_blockers],
-            "resolved": [blocker_to_dict(b) for b in resolved_blockers],
+            "open": [_blocker_view(b, headings) for b in open_blockers],
+            "resolved": [_blocker_view(b, headings) for b in resolved_blockers],
         }
     }
     return json.dumps(payload, indent=2) + "\n"
+
+
+def _blocker_view(blocker: Blocker, headings: dict[str, list[str]]) -> dict:
+    """A `derived.blockers.*` entry: `blocker_to_dict` plus the plan headings it
+    halted (SK-102), read from the same trail `render_show`'s text output already
+    uses. `blocker_to_dict` itself is the *state* serializer and stays unchanged -
+    `plan_headings` is read-time only, exactly like the `open`/`resolved` split
+    above it (SK-103): state.json gains no such key."""
+    return {**blocker_to_dict(blocker), "plan_headings": headings.get(blocker.task, [])}
 
 
 def _jsonl_records(path: Path):

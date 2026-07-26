@@ -8,7 +8,7 @@ at Gate 3 instead of inferred.
 
 import json
 
-from supskill_state.commands import init_sprint, record_artifact, record_blocker, render_show
+from supskill_state.commands import init_sprint, record_artifact, record_blocker, render_show, render_show_json
 from supskill_state.model import Task, TaskStatus
 from supskill_state.plan_coverage import headings_for_story
 from supskill_state.store import dump_state, load_state, runs_dir, state_path
@@ -107,3 +107,46 @@ def test_show_names_the_cancelled_headings_under_the_open_blocker(tmp_path, monk
     out = render_show(root=tmp_path)
     assert "plan headings this blocker halted:" in out
     assert "### Task 3: the guard's CLI verb (SK-052)" in out
+
+
+# --- Task 5 review fix round 1: Critical 1 (derived.blockers.* carried no plan_headings) ---
+
+
+def test_show_json_surfaces_the_plan_headings_under_the_open_blocker(tmp_path):
+    """Gate 3's prose reads `derived.blockers.open[i].plan_headings` from `show --json`
+    alone (SKILL.md:510) - this is the field that makes that instruction reachable."""
+    _init_with_plan(tmp_path)
+    record_blocker("SK-052", "contradiction", "observed", list(OPTIONS), RECOMMEND, root=tmp_path)
+    derived = json.loads(render_show_json(root=tmp_path))["derived"]
+    assert derived["blockers"]["open"][0]["plan_headings"] == [
+        "### Task 2: the guard (SK-052)",
+        "### Task 3: the guard's CLI verb (SK-052)",
+    ]
+
+
+def test_show_json_gives_a_headingless_blocker_an_empty_list_not_a_bogus_one(tmp_path):
+    """No recorded dev plan (or no matching heading) must not sprout a fabricated
+    or leaked value - the same guarantee `record_blocker`'s trail already gives."""
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.tasks = [Task(id="SK-052", seam="unit", provable="offline", status=TaskStatus.PENDING)]
+    dump_state(state, state_path(tmp_path))
+    record_blocker("SK-052", "contradiction", "observed", list(OPTIONS), RECOMMEND, root=tmp_path)
+    derived = json.loads(render_show_json(root=tmp_path))["derived"]
+    assert derived["blockers"]["open"][0]["plan_headings"] == []
+
+
+def test_show_json_surfaces_the_plan_headings_under_a_resolved_blocker_too(tmp_path):
+    """The fix adds `plan_headings` to both `derived.blockers.open` and `.resolved` -
+    a blocker that settles keeps the record of what it halted while it was open."""
+    _init_with_plan(tmp_path)
+    record_blocker("SK-052", "contradiction", "observed", list(OPTIONS), RECOMMEND, root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.tasks = [Task(id="SK-052", seam="unit", provable="offline", status=TaskStatus.DONE)]
+    dump_state(state, state_path(tmp_path))
+    derived = json.loads(render_show_json(root=tmp_path))["derived"]
+    assert derived["blockers"]["open"] == []
+    assert derived["blockers"]["resolved"][0]["plan_headings"] == [
+        "### Task 2: the guard (SK-052)",
+        "### Task 3: the guard's CLI verb (SK-052)",
+    ]
