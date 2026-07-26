@@ -26,6 +26,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from . import store
 from .errors import StateError
 from .scratch import normalize_sprint_id
 
@@ -57,7 +58,29 @@ def git_head(root: str) -> str:
 
 
 def package_path(root: Path, sprint_id: str) -> Path:
-    return Path(root) / ".supskill" / "runs" / normalize_sprint_id(sprint_id) / "package.jsonl"
+    return store.runs_dir(Path(root)) / normalize_sprint_id(sprint_id) / "package.jsonl"
+
+
+def dispatch_root_for(root: Path, record: dict) -> Path:
+    """Where `review-guard` should rev-parse HEAD: the package's own dispatch root.
+
+    SK-104 fix: EXECUTE isolates into a worktree (SK-111), and `.supskill/` never
+    moves - so a package cut in `.worktrees/<branch>` records `dispatch_root` and this
+    reads it back rather than guessing. That mirrors this repo's own rule that a
+    recorded artifact is the only authority anything downstream reads (SK-114); a
+    `--dispatch-root` flag on the guard itself would repeat the mistake SK-114 fixed.
+
+    A relative `dispatch_root` resolves against `root` (the state root), so
+    `.worktrees/s7` works regardless of which directory `review-guard` was invoked
+    from. Absent, blank, or non-string `dispatch_root` - an older record, or the
+    non-worktree case where dispatch root and state root are the same - falls back to
+    `root` unchanged.
+    """
+    raw = record.get("dispatch_root")
+    if not isinstance(raw, str) or not raw.strip():
+        return Path(root)
+    candidate = Path(raw.strip())
+    return candidate if candidate.is_absolute() else Path(root) / candidate
 
 
 def last_record(root: Path, sprint_id: str) -> dict | None:
@@ -108,7 +131,7 @@ def refusal(record: dict, current_head: str) -> str:
     return (
         "the recorded review package is stale: HEAD has moved since EXECUTE cut it.\n"
         f"  package base:  {base}\n"
-        f"  package head:  {recorded_head or '(none recorded)'}\n"
+        f"  package head:  {recorded_head.strip() or '(none recorded)'}\n"
         f"  HEAD now:      {current_head}\n"
         f"  package file:  {path}\n"
         "PAR would review a diff that is not this branch, and a review of the wrong code "

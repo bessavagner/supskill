@@ -14,7 +14,7 @@ import pytest
 from supskill_state.cli import main
 from supskill_state.commands import init_sprint, record_package
 from supskill_state.errors import StateError
-from supskill_state.review_package import git_head, is_stale, last_record, refusal
+from supskill_state.review_package import dispatch_root_for, git_head, is_stale, last_record, refusal
 from supskill_state.store import require_aware_utc_iso, runs_dir
 
 RECORD = {"base": "a1b2c3d", "head": "f9e8d7c", "path": ".superpowers/sdd/s1/review-final.diff"}
@@ -138,3 +138,130 @@ def test_the_package_verb_records_through_the_cli(tmp_path, monkeypatch, capsys)
                  "--path", "scratch/review-final.diff"]) == 0
     assert "recorded review package" in capsys.readouterr().out
     assert last_record(tmp_path, "s1")["base"] == "a1b2c3d"
+
+
+# --- review findings fix round 1: Important 2 (false-pass surfaces were untested) ---
+
+
+def _write_package_jsonl(tmp_path, sprint_id, lines):
+    """Write raw lines to runs/<id>/package.jsonl, bypassing record_package.
+
+    Lets a test construct a malformed or partial record that record_package's own
+    validation would refuse to write - exactly the kind of record a torn write or a
+    hand-edited trail can leave behind.
+    """
+    path = runs_dir(tmp_path) / sprint_id / "package.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_last_record_skips_a_torn_or_malformed_tail_line(tmp_path):
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    good = json.dumps({"base": "a1b2c3d", "head": "f9e8d7c", "path": "x.diff"})
+    _write_package_jsonl(tmp_path, "s1", [good, '{"base": "a1b2c3d", "head": "011'])  # torn tail
+    assert last_record(tmp_path, "s1") == json.loads(good)
+
+
+def test_last_record_skips_a_non_dict_record(tmp_path):
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    good = json.dumps({"base": "a1b2c3d", "head": "f9e8d7c", "path": "x.diff"})
+    _write_package_jsonl(tmp_path, "s1", [good, json.dumps(["not", "a", "dict"])])
+    assert last_record(tmp_path, "s1") == json.loads(good)
+
+
+def test_guard_refuses_when_the_recorded_head_key_is_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    _write_package_jsonl(
+        tmp_path, "s1", [json.dumps({"base": "a1b2c3d", "path": "x.diff"})]  # no "head" at all
+    )
+    assert main(["review-guard"]) == 1
+    assert "review-package" in capsys.readouterr().err
+
+
+def test_guard_refuses_when_the_recorded_head_is_whitespace_only(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    _write_package_jsonl(
+        tmp_path, "s1", [json.dumps({"base": "a1b2c3d", "head": "   ", "path": "x.diff"})]
+    )
+    assert main(["review-guard"]) == 1
+    assert "review-package" in capsys.readouterr().err
+
+
+# --- review findings fix round 1: Important 1 (guard rev-parsed the wrong repo) ---
+
+
+def test_dispatch_root_for_falls_back_to_the_state_root_when_absent(tmp_path):
+    assert dispatch_root_for(tmp_path, {}) == tmp_path
+
+
+def test_dispatch_root_for_falls_back_to_the_state_root_when_blank(tmp_path):
+    assert dispatch_root_for(tmp_path, {"dispatch_root": "   "}) == tmp_path
+
+
+def test_dispatch_root_for_resolves_a_relative_path_against_the_state_root(tmp_path):
+    assert dispatch_root_for(tmp_path, {"dispatch_root": ".worktrees/s1"}) == tmp_path / ".worktrees" / "s1"
+
+
+def test_dispatch_root_for_leaves_an_absolute_path_unchanged(tmp_path):
+    worktree = tmp_path / "elsewhere"
+    assert dispatch_root_for(tmp_path, {"dispatch_root": str(worktree)}) == worktree
+
+
+def test_record_package_stores_the_dispatch_root_when_given(tmp_path):
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    record_package("a1b2c3d", "f9e8d7c", "scratch/review-final.diff",
+                    dispatch_root=".worktrees/s1", root=tmp_path)
+    assert last_record(tmp_path, "s1")["dispatch_root"] == ".worktrees/s1"
+
+
+def test_record_package_stores_a_null_dispatch_root_when_omitted(tmp_path):
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    record_package("a1b2c3d", "f9e8d7c", "scratch/review-final.diff", root=tmp_path)
+    assert last_record(tmp_path, "s1")["dispatch_root"] is None
+
+
+def test_the_package_verb_records_the_dispatch_root_through_the_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    assert main(["package", "--base", "a1b2c3d", "--head", "f9e8d7c",
+                 "--path", "scratch/review-final.diff", "--dispatch-root", ".worktrees/s1"]) == 0
+    assert last_record(tmp_path, "s1")["dispatch_root"] == ".worktrees/s1"
+
+
+def test_guard_rev_parses_the_recorded_dispatch_root_not_the_state_root(tmp_path, monkeypatch, capsys):
+    """SK-104 fix: EXECUTE isolates into a worktree (SK-111) - .supskill/ stays at the
+    main root, but the package is cut on the sprint branch in the worktree. The guard
+    must rev-parse HEAD there, not at the state root, or it can never pass in that
+    workflow."""
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    worktree = tmp_path / ".worktrees" / "s1"
+    _git(tmp_path, "worktree", "add", "-b", "s1-branch", str(worktree))
+    (worktree / "a.txt").write_text("two\n", encoding="utf-8")
+    _git(worktree, "commit", "-aqm", "two")
+    worktree_head = git_head(str(worktree))
+    assert git_head(str(tmp_path)) != worktree_head  # the state root's own HEAD never moved
+    record_package("a1b2c3d", worktree_head, "scratch/review-final.diff",
+                    dispatch_root=str(worktree), root=tmp_path)
+    assert main(["review-guard"]) == 0
+    assert "matches HEAD" in capsys.readouterr().out
+
+
+def test_guard_resolves_a_relative_dispatch_root_against_the_state_root(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    init_sprint("s1", backlog="backlog.md", root=tmp_path)
+    worktree = tmp_path / ".worktrees" / "s1"
+    _git(tmp_path, "worktree", "add", "-b", "s1-branch", str(worktree))
+    (worktree / "a.txt").write_text("two\n", encoding="utf-8")
+    _git(worktree, "commit", "-aqm", "two")
+    worktree_head = git_head(str(worktree))
+    record_package("a1b2c3d", worktree_head, "scratch/review-final.diff",
+                    dispatch_root=".worktrees/s1", root=tmp_path)
+    assert main(["review-guard"]) == 0
+    assert "matches HEAD" in capsys.readouterr().out

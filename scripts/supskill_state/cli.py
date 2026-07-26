@@ -314,11 +314,18 @@ def _add_package(subparsers) -> None:
     sub.add_argument("--base", required=True, help="the package's base SHA (the merge-base)")
     sub.add_argument("--head", required=True, help="HEAD at the moment the package was cut")
     sub.add_argument("--path", required=True, help="where the diff was written, e.g. <scratch>/review-final.diff")
+    sub.add_argument(
+        "--dispatch-root",
+        dest="dispatch_root",
+        default=None,
+        help="where the package was cut, if not the state root (e.g. a worktree path); "
+             "review-guard rev-parses HEAD here instead of guessing",
+    )
     sub.set_defaults(func=_cmd_package)
 
 
 def _cmd_package(args) -> int:
-    commands.record_package(args.base, args.head, args.path)
+    commands.record_package(args.base, args.head, args.path, dispatch_root=args.dispatch_root)
     print(f"recorded review package: {args.base.strip()}..{args.head.strip()} -> {args.path.strip()}")
     return 0
 
@@ -344,7 +351,8 @@ def _cmd_review_guard(args) -> int:
     if record is None:
         print(review_package.missing_refusal(state.sprint.id), file=sys.stderr)
         return 1
-    current = review_package.git_head(str(root))
+    dispatch_root = review_package.dispatch_root_for(root, record)
+    current = review_package.git_head(str(dispatch_root))
     if review_package.is_stale(str(record.get("head", "")), current):
         print(review_package.refusal(record, current), file=sys.stderr)
         return 1

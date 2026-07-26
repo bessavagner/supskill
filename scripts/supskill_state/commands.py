@@ -626,6 +626,7 @@ def record_package(
     head: str,
     path: str,
     *,
+    dispatch_root: str | None = None,
     root: Path | None = None,
 ) -> None:
     """Record the review package EXECUTE just cut (SK-104).
@@ -635,6 +636,12 @@ def record_package(
     the one fact REVIEW cannot otherwise have - EXECUTE and REVIEW are separate
     `/supskill run` invocations, so the SHA the package covers has to survive on disk
     or not at all (invariant 5).
+
+    `dispatch_root` is optional: EXECUTE isolates into a worktree (SK-111), and when it
+    does, the package is cut there - not at the state root `.supskill/` never moves
+    from. Recording it here is what lets `review-guard` rev-parse the right repo instead
+    of inferring one; omitted, it means the dispatch root and the state root are the
+    same (the non-worktree case), and the guard falls back accordingly.
     """
     root = store.resolve_root(root)
     for flag, value in (("--base", base), ("--head", head), ("--path", path)):
@@ -648,6 +655,7 @@ def record_package(
             "base": base.strip(),
             "head": head.strip(),
             "path": path.strip(),
+            "dispatch_root": (dispatch_root or "").strip() or None,
             "at": store.now_utc_iso(),
         },
     )
