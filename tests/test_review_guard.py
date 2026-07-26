@@ -14,7 +14,14 @@ import pytest
 from supskill_state.cli import main
 from supskill_state.commands import init_sprint, record_package
 from supskill_state.errors import StateError
-from supskill_state.review_package import dispatch_root_for, git_head, is_stale, last_record, refusal
+from supskill_state.review_package import (
+    dispatch_root_for,
+    git_head,
+    is_stale,
+    last_record,
+    missing_refusal,
+    refusal,
+)
 from supskill_state.store import require_aware_utc_iso, runs_dir
 
 RECORD = {"base": "a1b2c3d", "head": "f9e8d7c", "path": ".superpowers/sdd/s1/review-final.diff"}
@@ -42,6 +49,25 @@ def test_refusal_names_both_shas_and_the_command_to_run():
     assert "f9e8d7c" in text and "0123456" in text and "a1b2c3d" in text
     assert "review-package" in text
     assert ".superpowers/sdd/s1/review-final.diff" in text
+
+
+def test_refusal_recovery_command_carries_dispatch_root():
+    """Carried finding: the recovery text must not reproduce the bug SK-104 just fixed -
+    an operator who copies a `package` call with no --dispatch-root re-records a package
+    the guard can never match in the worktree workflow."""
+    text = refusal(RECORD, "0123456")
+    assert "--dispatch-root" in text
+
+
+def test_refusal_recovery_command_uses_the_recorded_dispatch_root_when_present():
+    record = {**RECORD, "dispatch_root": ".worktrees/s1"}
+    text = refusal(record, "0123456")
+    assert "--dispatch-root .worktrees/s1" in text
+
+
+def test_missing_refusal_recovery_command_carries_dispatch_root():
+    text = missing_refusal("s1")
+    assert "--dispatch-root" in text
 
 
 def test_refusal_on_a_fresh_package_is_itself_refused():

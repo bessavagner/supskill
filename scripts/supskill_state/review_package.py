@@ -112,7 +112,9 @@ def missing_refusal(sprint_id: str) -> str:
         "prove PAR would review this branch.\n"
         "EXECUTE's halt is what records it, right after it writes the diff:\n"
         "  supskill-state package --base <merge-base> --head <HEAD> "
-        "--path <scratch>/review-final.diff\n"
+        "--path <scratch>/review-final.diff --dispatch-root <dispatch-root>\n"
+        "--dispatch-root is required whenever the package was cut in a worktree - the "
+        "guard rev-parses HEAD there, not at the state root (SK-104).\n"
         "An unrecorded package is exactly the state that hid this defect on playset s1: "
         "the diff on disk looked fine and nothing could say which commits it covered.\n"
         "Nothing was dispatched and no gate was called."
@@ -128,6 +130,7 @@ def refusal(record: dict, current_head: str) -> str:
         )
     base = str(record.get("base", "?"))
     path = str(record.get("path", "<scratch>/review-final.diff"))
+    dispatch_root = str(record.get("dispatch_root") or "").strip() or "<dispatch-root>"
     return (
         "the recorded review package is stale: HEAD has moved since EXECUTE cut it.\n"
         f"  package base:  {base}\n"
@@ -138,9 +141,11 @@ def refusal(record: dict, current_head: str) -> str:
         "comes back clean - which is why this refuses instead of proceeding.\n"
         "Regenerate the package from the dispatch root, re-record it, then re-run this "
         "stage:\n"
-        f"  review-package $(git merge-base <default-branch> HEAD) HEAD {path}\n"
-        f"  supskill-state package --base $(git merge-base <default-branch> HEAD) "
-        f"--head {current_head} --path {path}\n"
+        f"  review-package $(git -C {dispatch_root} merge-base <default-branch> HEAD) HEAD {path}\n"
+        f"  supskill-state package --base $(git -C {dispatch_root} merge-base <default-branch> HEAD) "
+        f"--head {current_head} --path {path} --dispatch-root {dispatch_root}\n"
+        "--dispatch-root is required whenever the package was cut in a worktree - the "
+        "guard rev-parses HEAD there, not at the state root (SK-104).\n"
         "Nothing was dispatched and no gate was called: G3 is still open.\n"
         "This compares SHAs; a package cut at the right HEAD from the wrong base walks "
         "past it."
