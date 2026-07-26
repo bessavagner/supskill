@@ -312,6 +312,12 @@ exactly the D1 violation this stage exists to avoid.
   `review-package $(git -C <dispatch-root> merge-base <default-branch> HEAD) HEAD <scratch>/review-final.diff`,
   run from `<dispatch-root>`, with `<default-branch>` derived exactly as in the
   branch check.
+  Then record what that package covers, so REVIEW can prove it is still the branch:
+  `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state package --base <the merge-base you just used> --head $(git -C <dispatch-root> rev-parse HEAD) --path <scratch>/review-final.diff --dispatch-root <dispatch-root>`
+  EXECUTE and REVIEW are different runs; a SHA you do not write down does not survive
+  the gap (SK-104). Pass `--dispatch-root` always: the package is cut in
+  `<dispatch-root>`, which is a worktree when EXECUTE isolated (check 1), and
+  `review-guard` must rev-parse HEAD in that same repo, never the state root.
 - **Every dispatch names its model explicitly.** An omitted model silently
   inherits this session's — usually the most capable and most expensive one.
   *Which* model per role is SDD's Model Selection section's call, not this
@@ -496,10 +502,12 @@ phrasings of the same option. That part is yours.
 
 ## The REVIEW stage
 
-PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Each writes its findings to its own `<scratch>/review-findings-<label>.md`, and you read that file — a reviewer's chat reply is a liveness signal, never the findings. Dispatch discipline, the collection rule, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b`. Then continue at **Gate 3**.
+Before you dispatch either reviewer, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state review-guard`: exit 1 means HEAD has moved past the package EXECUTE recorded, or that EXECUTE never recorded one. Relay the refusal verbatim and stop — do not regenerate the diff yourself. PAR handed a diff that is not this branch comes back *clean*, which is why this refuses rather than repairs (SK-104).
+
+PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Each writes its findings to its own `<scratch>/review-findings-<label>.md`, and you read that file — a reviewer's chat reply is a liveness signal, never the findings. Dispatch discipline, the collection rule, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b` — and add `--estimated` whenever you could not read that dispatch's reported usage, which is every reviewer dispatched as a mailbox teammate. A guessed number filed beside a measured one is the ledger lying quietly (SK-109). Then continue at **Gate 3**.
 ## Gate 3 — one decision, not two
 
-Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every open blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped. Before you ask the question, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state artifact-guard`: exit 1 means a recorded artifact — the sprint doc or the dev plan — is untracked by git, so the documents that authorize this sprint are not in the branch that implements it. Relay the refusal verbatim and stop; the commit is the operator's, and this skill never runs `git add`.
+Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every **open** blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped. Take open from `show --json`'s `derived.blockers.open`: a blocker whose task reached `DONE` or `DONE_WITH_CONCERNS` is settled and belongs in `derived.blockers.resolved`, which you report as context and never re-ask (SK-103). Where a blocker names the plan headings it halted, name them too — a story the plan spends three headings on, blocked at the first, cancelled two the operator never saw (SK-102). Before you ask the question, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state artifact-guard`: exit 1 means a recorded artifact — the sprint doc or the dev plan — is untracked by git, so the documents that authorize this sprint are not in the branch that implements it. Relay the refusal verbatim and stop; the commit is the operator's, and this skill never runs `git add`.
 
 4. Closes cleanly → `gate --id G3 --decision approved --response "<verbatim>"`. `REVIEW` is the last stage; nothing advances past it.
 5. Resolves into Shape 1, 2 or 3 → `gate --id G3 --decision replan --response "<verbatim>"`, then run the shape's own verb: [references/replan-shapes.md](references/replan-shapes.md).

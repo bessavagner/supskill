@@ -14,7 +14,11 @@ dispatched from `references/review-prompt.md` filled once for its own
 reading either's output; **neither reviewer sees the other's**, which is the
 competitive frame's entire point (D9). Cost each dispatch as it completes:
 `cost --stage REVIEW --label reviewer-a` / `cost --stage REVIEW --label
-reviewer-b`.
+reviewer-b`. A reviewer dispatched as a mailbox teammate reports no retrievable
+usage, so its token count is your estimate and the row must carry
+`--estimated`. Recording an estimate as if it were measured is what made this
+row: s2's reviewers were both filed at a round 70k with nothing in
+`costs.jsonl` saying so.
 
 Each dispatch also carries its own `{FINDINGS_PATH}`:
 `<scratch>/review-findings-reviewer-a.md` and
