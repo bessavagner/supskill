@@ -213,6 +213,7 @@ stage that failed in s1. This row exists so the fix is not re-litigated; it need
 | SK-115 | **Abandoning a sprint at REVIEW discards the decision that mattered most.** ledgerus s5 halted correctly — SK-052 blocked on a genuine `AGENTS.md` self-contradiction, SK-053/054/055 parked as downstream of that one root cause, all four terminal, advanced to REVIEW. The operator then resolved the contradiction out of band and re-inited s6 at `--entry EXECUTE`. `runs/s5/archive-1/gates.jsonl` holds G1 and G2 and no G3, so **how** that blocker was decided exists nowhere on disk: the trail preserves the question and loses the answer. This is the append-only audit trail failing at the one point it was built for. Distinct from SK-103 (a settled blocker still reading as open); here no decision is ever recorded at all. `init --archive` over a sprint resting at REVIEW with `G3_review: null` should refuse, or record an explicit superseded/abandoned decision naming the sprint that took over. (ledgerus s5→s6.) | 2 | M | ☑ |
 | SK-116 | An EXECUTE-entry continuation silently inherits the previous sprint's artifact pointers. ledgerus s6 carries `sprint.id: s6` with `artifacts.sprint_doc: docs/sprints/backlog-01/sprint-s5.md`, `dev_plan: …/2026-07-23-sprint-s5.md`, and `branch: s5` — it ran no SCOPE and no PLAN, then spent 2.78M tokens (the largest EXECUTE on record across both validation targets) against a plan written for a different sprint id. The run was correct and the resumption path did its job; the defect is that state cannot distinguish "s6 continues s5" from "s6 has its own doc that happens to be misnamed", so the cost ledger and the artifact pointers disagree about which sprint they describe. Record the continuation explicitly — a `continues` field set by `init --entry EXECUTE`, or carry the source sprint id forward — so the trail says what the sprint actually was. (ledgerus s6.) | 2 | C | ☑ |
 | SK-117 | The sprint doc and dev plan a branch implements are never staged. SCOPE and PLAN derive their output paths, write the files and record them as artifacts, but nothing stages them and no stage tells the operator to — so the two documents that authorize a sprint sit untracked while the code they authorize is committed. playset's reviewers raised it at s1 and again at s2 ("the plan a branch implements is not in the branch"); ledgerus needed a hand commit (`a3433df` there) after s6. Three occurrences, two projects, twice surfaced by a reviewer rather than a mechanism. **Report, do not stage:** supskill never runs git on the operator's behalf — it will not create, switch or delete a branch — so an automatic `git add` breaks the posture the EXECUTE branch check already states. A Gate 3 check that names any recorded artifact untracked by git fits the guard-module shape and leaves the commit to the operator. (playset s1/s2, ledgerus s6.) | 2 | M | ☑ |
+| SK-118 | `_archive_existing` archives `state.json` and `gates.jsonl` into `runs/<id>/archive-N/` on `init --archive`, but leaves `runs/<id>/package.jsonl`, `tasks.jsonl` and `blockers.jsonl` where they are — so every trail the SK-102/103/104 group reads outlives the run that wrote it, while `gates.jsonl` (read by `_last_gate_responses`) is the one trail that actually gets archived. Reusing a sprint id across `init --archive` therefore lets a previous run's package record survive under the new run's id: `review-guard`'s Critical false pass (final review of `feat/e9-gate3-inputs`, 2026-07-26) was mitigated there by refusing when the recorded diff is not on disk, but a diff that happens to still exist at the same derived scratch path (`derive_scratch` is a pure function of the sprint id) walks past that check. The same asymmetry lets `derived.blockers.*.plan_headings` and `render_show`'s `resolved by`/note report a *previous* run's facts as though they were this run's — worse than the absence SK-102/SK-103 were filed to fix, because a stale value reads as known. Move the whole `runs/<id>/*.jsonl` set into `archive-N/`, the way `_archive_existing` already does for `gates.jsonl`, so a reused id starts every trail empty, not just two of five. (final review of `feat/e9-gate3-inputs`, 2026-07-26.) | 3 | M | ☐ |
 
 **Sequencing.** SK-100 is the anchor and is planned first — it is a design change the rest
 sit downstream of, and it removes SK-108's capacity surface as a side effect. SK-101 is the
@@ -232,7 +233,7 @@ check at the same point, under a name the row does not use.
 
 **Delivered 2026-07-26 (SK-102, SK-103, SK-104, SK-109).** The Gate-3 input group: the
 highest-stakes screen in the product was assembled from four partly-untrustworthy inputs,
-and each is now either derived, recorded, or refused. Five divergences from the rows as
+and each is now either derived, recorded, or refused. Six divergences from the rows as
 filed, recorded here rather than by editing them. SK-103 asked for "a terminal non-blocked
 status" to resolve a blocker; `PARKED` is terminal and does **not** resolve one — a parked
 task never ran, which is the opposite of settled, so the resolving set is `DONE` and
@@ -253,7 +254,13 @@ linked-worktree cwd (that was SK-111), so the guard could only ever refuse in th
 workflow, and its own refusal text told the operator to do something that could not clear
 it. The fix: the package record carries where it was cut, and the guard rev-parses that. A
 `--dispatch-root` flag on the guard itself was considered and rejected as repeating
-SK-114's "deduced, never authorized" shape.
+SK-114's "deduced, never authorized" shape. SK-104 as filed also says the guard should
+fire "when HEAD has moved past the package's recorded **base**"; what shipped compares
+the recorded **head** instead. The shipped choice is correct — PAR reviews the diff
+between base and head, and it is head that moves out from under a cut package — and the
+plan's own Self-Review names the resulting ceiling (a package cut at the right head from
+the wrong base walks past the guard), but the note enumerates its divergences by name and
+this is the sixth.
 
 ---
 
