@@ -70,7 +70,7 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 136 pts for v1 (E1–E8, all shipped), plus 51 pts of E9 post-validation findings.**
+**Total: 136 pts for v1 (E1–E8, all shipped), plus 56 pts of E9 post-validation findings.**
 Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure. E9 is the exception's proof: the real runs turned the
@@ -177,7 +177,7 @@ supskill itself, three of which no fixture repo could have produced — see
 
 ---
 
-## E9 — Findings from real runs (51 pts)
+## E9 — Findings from real runs (56 pts)
 
 Written back from the E8 reports (`validation/reports/`, gitignored) and, from SK-114 on,
 mined from the on-disk `.supskill/runs/` trails of projects that adopted supskill after E8
