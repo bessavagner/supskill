@@ -38,6 +38,7 @@ def test_records_one_line_and_touches_nothing_in_state_json(tmp_path):
         "tokens": 71053,
         "tool_uses": 13,
         "duration_ms": 187319,
+        "estimated": False,
     }
 
 
@@ -114,3 +115,32 @@ def test_cli_records_with_the_right_exit_code(tmp_path, monkeypatch, capsys):
 
     assert main(["cost", "--stage", "BOGUS", "--tokens", "1"]) == 1
     assert "unknown stage" in capsys.readouterr().err
+
+
+def test_a_cost_row_is_measured_unless_it_says_otherwise(tmp_path):
+    """SK-109: the key is always present, so a row that predates it stays distinguishable."""
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_cost("REVIEW", 63016, label="reviewer-a", root=tmp_path)
+    assert _costs(tmp_path)[0]["estimated"] is False
+
+
+def test_an_estimated_row_is_marked(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_cost("REVIEW", 70000, label="reviewer-b", estimated=True, root=tmp_path)
+    assert _costs(tmp_path)[0]["estimated"] is True
+
+
+def test_the_cli_marks_an_estimate_and_says_so(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    assert main(["cost", "--stage", "REVIEW", "--label", "reviewer-b",
+                 "--tokens", "70000", "--estimated"]) == 0
+    assert "estimated" in capsys.readouterr().out
+    assert _costs(tmp_path)[0]["estimated"] is True
+
+
+def test_the_cli_defaults_to_measured(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    assert main(["cost", "--stage", "PLAN", "--tokens", "1234"]) == 0
+    assert _costs(tmp_path)[0]["estimated"] is False

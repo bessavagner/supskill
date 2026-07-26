@@ -581,6 +581,7 @@ def record_cost(
     label: str | None = None,
     tool_uses: int | None = None,
     duration_ms: int | None = None,
+    estimated: bool = False,
     root: Path | None = None,
 ) -> None:
     """Record one subagent dispatch's usage against the running sprint.
@@ -591,6 +592,13 @@ def record_cost(
     effect, so supskill's own open cost questions (PAR's doubled review cost,
     whether a SCOPE pass earns its keep) get answered from real numbers
     instead of estimation.
+
+    SK-109: `estimated` marks a row whose token count the conductor could not
+    retrieve. PAR's reviewers run as mailbox teammates and their transcripts are
+    not readable from the controller, so those rows were guessed at 70k and filed
+    beside measured ones with nothing to tell them apart. The key is written on
+    EVERY row, measured included - a row that predates this field has no key at
+    all, and that difference is the point.
     """
     root = store.resolve_root(root)
     try:
@@ -616,6 +624,7 @@ def record_cost(
             "tokens": tokens,
             "tool_uses": tool_uses,
             "duration_ms": duration_ms,
+            "estimated": estimated,
             "at": store.now_utc_iso(),
         },
     )

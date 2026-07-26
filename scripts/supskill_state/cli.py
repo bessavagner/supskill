@@ -427,6 +427,12 @@ def _add_cost(subparsers) -> None:
     sub.add_argument("--tokens", required=True, type=int, help="the dispatch's reported subagent_tokens")
     sub.add_argument("--tool-uses", type=int, dest="tool_uses", help="the dispatch's reported tool_uses")
     sub.add_argument("--duration-ms", type=int, dest="duration_ms", help="the dispatch's reported duration_ms")
+    sub.add_argument(
+        "--estimated",
+        action="store_true",
+        help="this token count was estimated, not read from a dispatch's reported usage "
+             "(e.g. a mailbox teammate whose transcript the conductor cannot retrieve)",
+    )
     sub.set_defaults(func=_cmd_cost)
 
 
@@ -437,9 +443,11 @@ def _cmd_cost(args) -> int:
         label=args.label,
         tool_uses=args.tool_uses,
         duration_ms=args.duration_ms,
+        estimated=args.estimated,
     )
     where = f"{args.stage}/{args.label}" if args.label else args.stage
-    print(f"recorded cost: {where} tokens={args.tokens}")
+    marker = " (estimated)" if args.estimated else ""
+    print(f"recorded cost: {where} tokens={args.tokens}{marker}")
     return 0
 
 
