@@ -1,6 +1,6 @@
 [project]
 name = "supskill"
-version = "0.5.0"
+version = "0.6.0"
 description = "supskill sprint conductor - supskill-state is its state spine"
 requires-python = ">=3.11"
 dependencies = []
