@@ -16,7 +16,7 @@
 - Every refusal must **write nothing** — validate fully before touching disk, the shape `record_blocker` already uses.
 - Trails are **append-only JSONL** via `store.append_jsonl`; timestamps via `store.now_utc_iso()`.
 - Per-run trails live at `store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / <name>.jsonl`, the pattern `record_cost` uses.
-- **Do not** change `record_gate`'s acceptance of an empty `--response` (`commands.py:402`, `empty is accepted and recorded by design (F-4)`).
+- `record_gate` **may** gain a keyword argument (Task 4 adds `batched`), but its **acceptance of an empty `--response` must not change** (`commands.py:402`, `empty is accepted and recorded by design (F-4)`). The constraint is on that one behaviour, not on the function.
 - **Do not** add merge, push, branch-create or branch-delete anywhere.
 - `state.json` schema stays at **1**. Everything added here is a trail or a read-time derivation.
 - Run `uv run pytest && uv run ruff check .` before every commit.
@@ -1183,12 +1183,17 @@ Run: `cat docs/runbook.md` and follow "Cut a release", replacing `0.6.0` with `0
 
 - [ ] **Step 2: Note the schema answer in the commit body**
 
-The release body must say whether an in-progress sprint can resume across the upgrade. For E10 the answer is **yes**: `state.json` schema stays at 1 and every addition is a trail or a read-time derivation. Verify before claiming it:
+The release body must say whether an in-progress sprint can resume across the upgrade. For E10 the answer is **yes**: `state.json` schema stays at 1 and every addition is a trail or a read-time derivation. Verify it against a real 0.6.0-written state file rather than asserting it — `/home/bessa/Documents/projetos/ledgerus/.supskill/state.json` is one:
 
-Run: `uv run python -c "
+```bash
+uv run python -c "
 from supskill_state.store import load_state, state_path
-print(load_state(state_path('<path-to-a-0.6.0-repo>')).sprint.id)
-"`
+s = load_state(state_path('/home/bessa/Documents/projetos/ledgerus'))
+print(s.sprint.id, s.stage, s.sprint.continues)
+"
+```
+
+Expected: it loads without error and prints the sprint id, stage, and `None` for `continues`. If that repo is gone, use any `.supskill/` written by 0.6.0; if none exists, say so in the release body rather than claiming resumability you did not test.
 
 - [ ] **Step 3: Update the install and verify**
 
