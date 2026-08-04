@@ -156,3 +156,22 @@ def test_cli_refuses_without_the_operator_attestation(tmp_path, monkeypatch):
 
     assert main(["action", "--stop", "artifact-guard.untracked", "--command", "git add a"]) == 1
     assert _actions(tmp_path) == []
+
+
+def test_the_consent_refusal_does_not_claim_the_action_was_not_executed(tmp_path):
+    """I3: this check runs when the action is REPORTED, after both flows have acted.
+
+    SKILL.md's step 3 archives then records; Gate 3 commits then records. "Nothing was
+    executed" is therefore false on exactly the path this refusal exists for, and it
+    would talk an operator out of looking for the unrecorded commit SK-131 exists to
+    make findable.
+    """
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    with pytest.raises(StateError) as refusal:
+        record_action("artifact-guard.untracked", "git add a", operator_answered=False, root=tmp_path)
+
+    text = str(refusal.value)
+    assert "nothing was executed" not in text.lower()
+    assert "unrecorded" in text
+    assert _actions(tmp_path) == []

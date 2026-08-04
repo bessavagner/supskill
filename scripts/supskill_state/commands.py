@@ -817,6 +817,16 @@ def record_action(
     caller that forgets it raises rather than silently acting, and the attestation is
     written onto the row so a later reader can see what was claimed.
 
+    What that check IS, stated exactly, because the wording it inherited overclaimed:
+    this is a post-hoc RECORD gate, not a pre-action gate. Both remediable prose flows
+    execute and then record - SKILL.md's step 3 archives then calls this, Gate 3 stages
+    and commits then calls this - so on the one path the refusal exists for, the action
+    has already happened and refusing here only leaves it unrecorded. The refusal says
+    so. The rejected `preflight.interactive_refusal(answered)` design ran before the
+    action and could honestly claim nothing had; this one cannot, and the precondition
+    "a run establishes an operator answer before its first remediable action" is carried
+    by conductor discipline in SKILL.md, not by this function.
+
     The ceiling, stated plainly: this records what the conductor attests, not what a
     human did - F-4 applies here exactly as it applies to the gates.
 
@@ -828,7 +838,10 @@ def record_action(
         raise StateError(
             "this run has not received a non-empty answer from an operator, so it will not act "
             "on one's behalf: AskUserQuestion auto-resolves with an empty answer in headless runs, "
-            "and an empty answer is not consent. Nothing was recorded and nothing was executed."
+            "and an empty answer is not consent. Nothing was recorded here. This check fires when "
+            "an action is REPORTED, not before it is taken - so if the conductor already ran the "
+            "command, that action has happened and is now unrecorded: look for a sprint that was "
+            "archived or a commit that was made without a row in actions.jsonl before continuing."
         )
     if stop.stop_class != stop_classes.REMEDIABLE:
         raise StateError(
