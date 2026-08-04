@@ -23,10 +23,7 @@ everything from that file. Never rely on anything a previous conversation knew.
 - **Never edit anything under `.supskill/` yourself.** Every mutation goes
   through a `supskill-state` verb. If the CLI refuses, report its message
   verbatim and stop — never work around a refusal.
-- **Never pass `--archive`.** Archiving a half-finished sprint is an operator
-  decision. The only thing this skill does with that flag is name it in a
-  refusal message and stop — matrix cell 3 or the SCOPE stage's backlog check
-  below. `init --archive` itself refuses over a sprint resting at `REVIEW` with no `G3` decision recorded — archiving it would keep the question and lose the answer (SK-115).
+- **Pass `--archive` only to close a sprint whose G3 decision is recorded** (`init.archive.decided`) — never over one still open. A sprint resting at `REVIEW` with no `G3` decision is `init.archive.undecided`, and `init --archive` itself still refuses over it: archiving it would keep the question and lose the answer (SK-115). Every stop's class — which the conductor now acts on, which still refuses — is [references/stop-classes.md](references/stop-classes.md).
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
   and no template instructs an agent to run one or to write under `.supskill/`.
@@ -54,7 +51,7 @@ sprint resumes; `init` defaults it to the archived sprint's id).
 
 ## The run checklist
 
-Copy this checklist into your response and check items off as you go.
+Copy this checklist into your response and check items off as you go. A run that has not received a real, non-empty answer from an operator this run takes no remediable action below — `action` refuses without `--operator-answered`, and that refusal is relayed verbatim like any other stop.
 
 1. **Read state.** Run:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state show --json`
@@ -70,7 +67,8 @@ Copy this checklist into your response and check items off as you go.
 3. **Compare ids.** Lowercase both the requested sprint id and `sprint.id`
    from the JSON.
    - Equal → this is a resume. Mutate nothing; continue at step 4.
-   - Different → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
+   - Different, and the on-disk sprint's `gates.G3_review` is non-null (`init.archive.decided`, [references/stop-classes.md](references/stop-classes.md)) → run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--backlog/--branch/--slug flag from this invocation, verbatim>` — never drop a flag the operator typed: an init that loses `--backlog` starts a sprint with `backlog: null`, which `replan-guard` refuses at Gate 3 — then `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop init.archive.decided --command "<the exact init line just run>" --operator-answered`. Continue at step 4.
+   - Different, and `gates.G3_review` is null (`init.archive.undecided`) → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
 
          A different sprint is already on disk: state.json holds <sprint.id>,
          you asked for <requested-id>. A half-finished sprint is never
@@ -507,7 +505,7 @@ Before you dispatch either reviewer, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill
 PAR: two adversarial reviewers on the identical `<scratch>/review-final.diff` package, worse severity wins (D9). Each writes its findings to its own `<scratch>/review-findings-<label>.md`, and you read that file — a reviewer's chat reply is a liveness signal, never the findings. Dispatch discipline, the collection rule, the aggregation rule, and the `review` verb's exact flags: [references/review-notes.md](references/review-notes.md). No dispatched reviewer runs `supskill-state`; cost each as it completes, `cost --stage REVIEW --label reviewer-a|reviewer-b` — and add `--estimated` whenever you could not read that dispatch's reported usage, which is every reviewer dispatched as a mailbox teammate. A guessed number filed beside a measured one is the ledger lying quietly (SK-109). Then continue at **Gate 3**.
 ## Gate 3 — one decision, not two
 
-Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every **open** blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped. Take open from `show --json`'s `derived.blockers.open`: a blocker whose task reached `DONE` or `DONE_WITH_CONCERNS` is settled and belongs in `derived.blockers.resolved`, which you report as context and never re-ask (SK-103). Where a blocker's `plan_headings` is non-empty, name those headings too — a story the plan spends three headings on, blocked at the first, cancelled two the operator never saw (SK-102). Before you ask the question, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state artifact-guard`: exit 1 means a recorded artifact — the sprint doc or the dev plan — is untracked by git, so the documents that authorize this sprint are not in the branch that implements it. Relay the refusal verbatim and stop; the commit is the operator's, and this skill never runs `git add`.
+Ask for real, refuse an empty answer, record verbatim — the same shape as Gate 1 and Gate 2: [references/gate.md](references/gate.md). The question batches every **open** blocker, every parked task, every `DONE_WITH_CONCERNS` note, and every `runs/<id>/review.jsonl` finding at `confidence=high` or `confidence=actionable` — nothing silently dropped. Take open from `show --json`'s `derived.blockers.open`: a blocker whose task reached `DONE` or `DONE_WITH_CONCERNS` is settled and belongs in `derived.blockers.resolved`, which you report as context and never re-ask (SK-103). Where a blocker's `plan_headings` is non-empty, name those headings too — a story the plan spends three headings on, blocked at the first, cancelled two the operator never saw (SK-102). Before you ask the question, run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state artifact-guard`: exit 0 → continue to the question. Exit 1 means a recorded artifact — the sprint doc or the dev plan — is untracked by git, so the documents that authorize this sprint are not in the branch that implements it: this is `artifact-guard.untracked` ([references/stop-classes.md](references/stop-classes.md) has the exact commands). Check the untracked path(s) against `guard_conductor_commit`'s denylist there; clean → stage and commit exactly those paths, then `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop artifact-guard.untracked --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered`, then continue to the question. A foreign path → relay it and stop; that commit is not yours to make, and nothing is recorded.
 
 4. Closes cleanly → `gate --id G3 --decision approved --response "<verbatim>"`. `REVIEW` is the last stage; nothing advances past it.
 5. Resolves into Shape 1, 2 or 3 → `gate --id G3 --decision replan --response "<verbatim>"`, then run the shape's own verb: [references/replan-shapes.md](references/replan-shapes.md).

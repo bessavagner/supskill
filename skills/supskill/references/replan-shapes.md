@@ -18,6 +18,14 @@ specifically (`docs/plans/sprints/backlog-01/backlog.md:29-30`); `backlog.md`
 was never inside that boundary, and every prior sprint's delta pass has
 already edited it this way, by hand, in a `docs:` commit.
 
+After the writeback, commit exactly the backlog path just written —
+`git add backlog.md && git commit -m "docs: backlog delta from <sprint-id>'s replan"` —
+and name the resulting SHA (`git rev-parse HEAD`) in the Gate 3 report, so
+the operator can see the commit without re-deriving it. This is not an
+`action --stop ...` record: no stop fired here (Shape 1 is a direct edit,
+not a refusal), so `stop_classes.STOPS` names no id for it — the commit and
+its SHA in the report are the record.
+
 ## Shape 2 — park at a live boundary
 
 `task --id <story-id> --status PARKED --note "<the blocker that parked it>"` —
