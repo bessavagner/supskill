@@ -110,3 +110,79 @@ def test_cli_gate_accepts_replan(tmp_path, monkeypatch):
     assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
     assert main(["gate", "--id", "G3", "--decision", "replan", "--response", "shape 1: writeback"]) == 0
     assert load_state(state_path(tmp_path)).gates["G3_review"] == "replan"
+
+
+def test_a_gate_row_records_whether_it_was_batch_accepted(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_gate("G1", "approved", "all three, your recs", batched=True, root=tmp_path)
+
+    row = _gate_lines(tmp_path)[-1]
+    assert row["batched"] is True
+
+
+def test_an_individually_answered_gate_is_marked_not_batched(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_gate("G1", "approved", "approve", root=tmp_path)
+
+    assert _gate_lines(tmp_path)[-1]["batched"] is False
+
+
+def test_show_prints_a_batched_gate_as_one(tmp_path):
+    """I2: the design promised `show` renders it, so the two provenances are tellable apart."""
+    from supskill_state.commands import render_show
+
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_gate("G1", "approved", "all three, your recs", batched=True, root=tmp_path)
+
+    line = next(li for li in render_show(root=tmp_path).splitlines() if "G1 G1_sprint_doc" in li)
+    assert "(batched)" in line
+
+
+def test_show_says_nothing_extra_for_an_individually_answered_gate(tmp_path):
+    from supskill_state.commands import render_show
+
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_gate("G1", "approved", "approve", root=tmp_path)
+
+    line = next(li for li in render_show(root=tmp_path).splitlines() if "G1 G1_sprint_doc" in li)
+    assert "batched" not in line
+
+
+def test_show_json_carries_each_gates_batched_flag(tmp_path):
+    import json as _json
+
+    from supskill_state.commands import render_show_json
+
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_gate("G1", "approved", "all three, your recs", batched=True, root=tmp_path)
+    record_gate("G2", "approved", "reasoned this one on its own terms", root=tmp_path)
+
+    gates = _json.loads(render_show_json(root=tmp_path))["derived"]["gates"]
+    assert gates["G1_sprint_doc"] == {"decision": "approved", "batched": True}
+    assert gates["G2_plan"] == {"decision": "approved", "batched": False}
+    assert gates["G3_review"] == {"decision": None, "batched": False}
+
+
+def test_the_gate_reference_instructs_batched_with_its_condition():
+    """I2: an unpassed flag makes every row assert `batched: false` - SK-109's defect back."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    text = (root / "skills" / "supskill" / "references" / "gate.md").read_text(encoding="utf-8")
+    assert "--batched" in text
+    assert "only when every item in it carries a recommendation" in text
+
+
+def test_the_last_gate_row_wins_when_a_stage_is_re_gated(tmp_path):
+    import json as _json
+
+    from supskill_state.commands import render_show_json
+
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+    record_gate("G1", "rejected", "no", batched=True, root=tmp_path)
+    record_gate("G1", "approved", "yes, on its own terms", root=tmp_path)
+
+    gates = _json.loads(render_show_json(root=tmp_path))["derived"]["gates"]
+    assert gates["G1_sprint_doc"] == {"decision": "approved", "batched": False}

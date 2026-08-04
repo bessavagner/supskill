@@ -81,3 +81,29 @@ def test_the_step_three_refusal_carries_the_operators_own_flags_forward():
     assert "--backlog" in section
     assert "the flags you gave this invocation" in section
     assert "Do not run that command." in section  # the restraint survives the edit
+
+
+def test_every_mutating_run_checklist_branch_re_reads_state_before_step_four():
+    """C1: step 4 reports "from the same `show --json` output" - step 1's.
+
+    So any branch that runs `init` on the way to step 4 has replaced the sprint that
+    JSON describes, and must re-read before it reports or dispatches. The archive
+    branch shipped without that line and would have reported the archived sprint's
+    surface and routed step 6 on its stale `stage` (invariant 5: the conductor holds
+    no state across a mutation).
+    """
+    skill = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    init_call = "${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init"
+    step_two = text[text.index("2. **Init (no state on disk).**") : text.index("\n3. **Compare ids.**")]
+    step_three = text[text.index("3. **Compare ids.**") : text.index("\n4. **")]
+    branches = [step_two, *step_three.split("\n   - ")[1:]]
+    mutating = [
+        branch
+        for branch in branches
+        # the evidential branch quotes the init line for the operator without running it
+        if init_call in branch and "Do not run that command." not in branch
+    ]
+    assert len(mutating) == 2, "expected step 2 and step 3's archive branch to run init"
+    for branch in mutating:
+        assert "show --json` again" in branch, f"branch runs init without re-reading:\n{branch}"

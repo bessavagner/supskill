@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 
 from . import blockers as blockers_view
-from . import config, store
+from . import config, stop_classes, store
 from .errors import StateError
 from .model import (
     ARTIFACT_KEYS,
@@ -194,7 +194,8 @@ def _archive_existing(root: Path) -> Path:
 def render_show(root: Path | None = None) -> str:
     root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
-    responses = _last_gate_responses(root)
+    gate_rows = _last_gate_rows(root)
+    responses = {key: row.get("response", "") for key, row in gate_rows.items()}
 
     slug = f" ({state.sprint.slug})" if state.sprint.slug else ""
     lines = [
@@ -213,6 +214,11 @@ def render_show(root: Path | None = None) -> str:
         line = f"  {cli_id} {key}: {decision}"
         if key in responses:
             line += f'  response: "{responses[key]}"'
+        # SK-133: a bulk acceptance is printed as one, so it is not read as a
+        # considered decision. Only the true case prints - a gate answered item by
+        # item says nothing extra.
+        if gate_rows.get(key, {}).get("batched"):
+            line += "  (batched)"
         lines.append(line)
 
     counts = Counter(task.status for task in state.tasks)
@@ -273,11 +279,23 @@ def render_show_json(root: Path | None = None) -> str:
         _blocker_plan_headings(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
     )
     notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+    decisions = _blocker_decisions(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
+    gate_rows = _last_gate_rows(root)
     payload["derived"] = {
         "blockers": {
-            "open": [_blocker_view(b, headings, state.tasks, notes) for b in open_blockers],
-            "resolved": [_blocker_view(b, headings, state.tasks, notes) for b in resolved_blockers],
-        }
+            "open": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in open_blockers],
+            "resolved": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in resolved_blockers],
+        },
+        # SK-133: state.json records WHAT was decided; only the trail records whether
+        # one answer accepted a batch. Read-time like everything else under `derived` -
+        # state.json gains no key.
+        "gates": {
+            key: {
+                "decision": state.gates[key],
+                "batched": bool(gate_rows.get(key, {}).get("batched")),
+            }
+            for key in GATE_KEYS.values()
+        },
     }
     return json.dumps(payload, indent=2) + "\n"
 
@@ -287,6 +305,7 @@ def _blocker_view(
     headings: dict[str, list[str]],
     tasks: list[Task],
     notes: dict[str, tuple[str, str | None]],
+    decisions: dict[str, dict],
 ) -> dict:
     """A `derived.blockers.*` entry: `blocker_to_dict` plus the plan headings it
     halted (SK-102) and, once resolved, the evidence of how (Important 3, final
@@ -311,14 +330,22 @@ def _blocker_view(
     this blocker. `blocker_to_dict` itself is the *state* serializer and stays
     unchanged; everything added here is read-time only (SK-103): state.json
     gains no such key.
+
+    `decision`/`batched` come from the blocker's own `decide` row (SK-132/SK-133),
+    unrelated to `resolved_by`: a blocker can be answered without yet being settled
+    (the task hasn't moved), which is exactly what makes them worth showing side by
+    side rather than folding one into the other.
     """
     status = blockers_view.resolving_status(blocker, tasks)
     _, note = notes.get(blocker.task, (None, None)) if status else (None, None)
+    decision = decisions.get(blocker.task)
     return {
         **blocker_to_dict(blocker),
         "plan_headings": headings.get(blocker.task, []),
         "resolved_by": status.value if status else None,
         "note": note,
+        "decision": decision["option"] if decision else None,
+        "batched": decision["batched"] if decision else False,
     }
 
 
@@ -342,13 +369,22 @@ def _jsonl_records(path: Path):
             yield record
 
 
-def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
-    responses: dict[str, str] = {}
+def _last_gate_rows(root: Path | None = None) -> dict[str, dict]:
+    """Each gate's last recorded row from gates.jsonl, keyed by state key.
+
+    Last wins, the same rule state.gates itself follows: a re-gated stage's newest
+    answer is the one `show` reports.
+    """
+    rows: dict[str, dict] = {}
     for record in _jsonl_records(store.gates_path(root)):
         key = GATE_KEYS.get(record.get("gate"))
         if key is not None:
-            responses[key] = record.get("response", "")
-    return responses
+            rows[key] = record
+    return rows
+
+
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    return {key: row.get("response", "") for key, row in _last_gate_rows(root).items()}
 
 
 def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:
@@ -374,6 +410,16 @@ def _blocker_plan_headings(root: Path | None, sprint_id: str) -> dict[str, list[
     return found
 
 
+def _blocker_decisions(root: Path, sprint_id: str) -> dict[str, dict]:
+    """task id -> its decision row, for blockers answered through `decide` (SK-132)."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
+    found: dict[str, dict] = {}
+    for record in _jsonl_records(path):
+        if record.get("row") == "decision":
+            found[record["task"]] = record
+    return found
+
+
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
     root = store.resolve_root(root)
     if name not in ARTIFACT_KEYS:
@@ -388,7 +434,14 @@ def record_artifact(name: str, file_path: str, root: Path | None = None) -> Stat
     return state
 
 
-def record_gate(gate_id: str, decision: str, response: str, root: Path | None = None) -> State:
+def record_gate(
+    gate_id: str,
+    decision: str,
+    response: str,
+    *,
+    batched: bool = False,
+    root: Path | None = None,
+) -> State:
     root = store.resolve_root(root)
     if gate_id not in GATE_KEYS:
         raise StateError(f"unknown gate {gate_id!r}; expected one of {sorted(GATE_KEYS)}")
@@ -400,6 +453,7 @@ def record_gate(gate_id: str, decision: str, response: str, root: Path | None = 
         "gate": gate_id,
         "decision": decision,
         "response": response,  # verbatim; empty is accepted and recorded by design (F-4)
+        "batched": batched,  # SK-133: a bulk acceptance must not read as a considered one
         "at": store.now_utc_iso(),
     }
     store.append_jsonl(store.gates_path(root), record)  # trail FIRST
@@ -490,6 +544,65 @@ def record_blocker(
     task.status = TaskStatus.BLOCKED  # flip the task
     store.dump_state(state, store.state_path(root))  # one atomic state write, SECOND
     return state
+
+
+def record_decision(
+    task_id: str,
+    option: str,
+    response: str,
+    *,
+    batched: bool = False,
+    root: Path | None = None,
+) -> None:
+    """Record which option an operator chose for a blocker (SK-132).
+
+    This records the ANSWER, not the RESOLUTION. Whether the blocker is settled
+    stays `blockers.resolving_status`'s derivation from task status (SK-103): a
+    second independent mover could disagree with the task, and Gate 3 would then
+    have two answers and no rule for picking one.
+
+    `option` is matched against the blocker's own recorded options[] labels, so a
+    label the operator was never offered cannot be recorded as their choice.
+    """
+    root = store.resolve_root(root)
+    if not response.strip():
+        raise StateError("a decision requires a non-empty --response - an empty answer is not a decision (D4)")
+
+    state = store.load_state(store.state_path(root))
+    blocker = next((b for b in state.blockers if b.task == task_id), None)
+    if blocker is None:
+        raise StateError(f"no blocker recorded for task {task_id!r}")
+
+    match = _OPTION_LABEL.match(option)
+    if match is None:
+        raise StateError(f"--option must be a label like '(a)': {option!r}")
+    label = match.group(1)
+    offered = [_OPTION_LABEL.match(o).group(1) for o in blocker.options if _OPTION_LABEL.match(o)]
+    if label not in offered:
+        raise StateError(
+            f"option ({label}) was never offered for {task_id}; this blocker offers {offered}"
+        )
+
+    sprint_dir = normalize_sprint_id(state.sprint.id)
+    blockers_file = store.runs_dir(root) / sprint_dir / "blockers.jsonl"
+    for record in _jsonl_records(blockers_file):
+        if record.get("row") == "decision" and record.get("task") == task_id:
+            raise StateError(
+                f"{task_id} was already decided as ({record['option']}); "
+                "the trail is append-only and a decision is not re-taken"
+            )
+
+    store.append_jsonl(
+        blockers_file,
+        {
+            "row": "decision",
+            "task": task_id,
+            "option": label,
+            "response": response,
+            "batched": batched,
+            "at": store.now_utc_iso(),
+        },
+    )
 
 
 def load_tasks(
@@ -673,6 +786,82 @@ def record_cost(
             "tool_uses": tool_uses,
             "duration_ms": duration_ms,
             "estimated": estimated,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
+def record_action(
+    stop_id: str,
+    command: str,
+    *,
+    operator_answered: bool,
+    result: str = "ok",
+    sha: str | None = None,
+    root: Path | None = None,
+) -> None:
+    """Record one action the conductor took on the operator's behalf (SK-131).
+
+    Only a `remediable` stop may produce one: an evidential stop is a refusal, and
+    a refusal that writes an action record would be claiming it fixed the thing it
+    was built to surface.
+
+    `reason` is copied from the classification table's own `condition`, never
+    supplied by the caller - the record says why the stop fired, not why the
+    conductor felt like acting.
+
+    `operator_answered` is SK-136: a run that cannot reach an operator does not act
+    on their behalf. AskUserQuestion auto-resolves with an EMPTY answer in ~37ms in
+    headless runs (D4), so before E10 that cost a missing record and here it would
+    cost an executed action nobody chose. It is keyword-only with NO default, so a
+    caller that forgets it raises rather than silently acting, and the attestation is
+    written onto the row so a later reader can see what was claimed.
+
+    What that check IS, stated exactly, because the wording it inherited overclaimed:
+    this is a post-hoc RECORD gate, not a pre-action gate. Both remediable prose flows
+    execute and then record - SKILL.md's step 3 archives then calls this, Gate 3 stages
+    and commits then calls this - so on the one path the refusal exists for, the action
+    has already happened and refusing here only leaves it unrecorded. The refusal says
+    so. The rejected `preflight.interactive_refusal(answered)` design ran before the
+    action and could honestly claim nothing had; this one cannot, and the precondition
+    "a run establishes an operator answer before its first remediable action" is carried
+    by conductor discipline in SKILL.md, not by this function.
+
+    The ceiling, stated plainly: this records what the conductor attests, not what a
+    human did - F-4 applies here exactly as it applies to the gates.
+
+    Pure telemetry in the same sense as record_cost: state.json never changes.
+    """
+    root = store.resolve_root(root)
+    stop = stop_classes.classify(stop_id)  # refuses an unknown id, writing nothing
+    if not operator_answered:
+        raise StateError(
+            "this run has not received a non-empty answer from an operator, so it will not act "
+            "on one's behalf: AskUserQuestion auto-resolves with an empty answer in headless runs, "
+            "and an empty answer is not consent. Nothing was recorded here. This check fires when "
+            "an action is REPORTED, not before it is taken - so if the conductor already ran the "
+            "command, that action has happened and is now unrecorded: look for a sprint that was "
+            "archived or a commit that was made without a row in actions.jsonl before continuing."
+        )
+    if stop.stop_class != stop_classes.REMEDIABLE:
+        raise StateError(
+            f"{stop_id} is {stop.stop_class}, not remediable - it is a refusal to relay, "
+            "not an action to take"
+        )
+    if not command.strip():
+        raise StateError("an action record requires a non-empty --command")
+
+    state = store.load_state(store.state_path(root))
+    actions_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "actions.jsonl"
+    store.append_jsonl(
+        actions_file,
+        {
+            "stop": stop.id,
+            "reason": stop.condition,
+            "command": command,
+            "sha": sha,
+            "result": result,
+            "operator_answered": operator_answered,  # SK-136: attested, not inferred
             "at": store.now_utc_iso(),
         },
     )

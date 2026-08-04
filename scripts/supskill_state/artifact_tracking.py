@@ -8,11 +8,15 @@ authorize is committed. playset's reviewers raised it at s1 and again at s2
 commit after s6. Three occurrences, two projects, every one surfaced by a reader
 rather than by a mechanism.
 
-Report, never stage. supskill runs no git command on the operator's behalf that
-changes the repo - it will not create, switch or delete a branch, and it will
-not `git add`. This module asks git one read-only question and refuses; the
-commit stays the operator's, which is the same posture EXECUTE's branch check
-already states.
+Report, never stage - in this module. It asks git one read-only question and
+refuses; it creates no branch, stages nothing and commits nothing. What happens
+after the refusal is the conductor's business, not this module's: under E10
+`artifact-guard.untracked` is a *remediable* stop (`stop_classes.py`), so the
+conductor checks the named paths against the conductor-commit denylist, commits
+exactly them, and records that commit to `actions.jsonl`. The distinction
+matters because this refusal is relayed verbatim - it is a remediable stop's
+report, not a refusal that hands the work back to the operator, and it must not
+claim supskill will never touch the repo when at this one seam it now does.
 
 The ceiling, stated here because it will be oversold otherwise: a repo that
 deliberately git-ignores its sprint docs refuses here every time, and there is
@@ -105,9 +109,12 @@ def refusal(missing: list[str]) -> str:
         f"{listed}\n"
         "Gate 3 asks the operator to rule on a sprint; a reader who comes to this branch "
         "later gets the code and not the plan it was held to.\n"
-        "This is reported and never fixed here: supskill runs no git command that changes "
-        "your repo. Stage and commit the paths above yourself, then re-run this stage.\n"
-        "Nothing was recorded and no gate was called: G3 is still open.\n"
+        "This is reported and never fixed here: this guard asks git one read-only question "
+        "and stages nothing. It is artifact-guard.untracked, a remediable stop: the conductor "
+        "checks these paths against the conductor-commit denylist, commits exactly them, and "
+        "records that commit with `action --stop artifact-guard.untracked`. Outside a supskill "
+        "run, stage and commit the paths above yourself, then re-run this stage.\n"
+        "Nothing was recorded by this guard and no gate was called: G3 is still open.\n"
         "This asks whether git knows the file, not whether its contents still match the "
         "sprint; a tracked-but-stale doc walks past it."
     )

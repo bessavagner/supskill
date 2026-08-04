@@ -18,6 +18,29 @@ specifically (`docs/plans/sprints/backlog-01/backlog.md:29-30`); `backlog.md`
 was never inside that boundary, and every prior sprint's delta pass has
 already edited it this way, by hand, in a `docs:` commit.
 
+After the writeback, this is `replan-guard.writeback-uncommitted`
+([stop-classes.md](stop-classes.md)): a backlog writeback this
+run applied and has not yet committed. Check `backlog.md` against the
+conductor-commit denylist exactly as `artifact-guard.untracked` does:
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state conductor-commit-guard --path <the backlog path>
+
+It never matches for a plain `backlog.md` path, but the check runs
+regardless, same as every other conductor commit; exit 1 is
+`conductor-commit-guard.foreign` ([stop-classes.md](stop-classes.md)) —
+relay it and stop. Exit 0 → commit exactly the backlog path just written,
+nothing else:
+
+    git add backlog.md && git commit -m "docs: backlog delta from <sprint-id>'s replan"
+
+then record it, so this commit lands in `actions.jsonl` the same way the
+`artifact-guard` one does:
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop replan-guard.writeback-uncommitted --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered
+
+Name the SHA in the Gate 3 report too, so the operator can see the commit
+without re-deriving it.
+
 ## Shape 2 — park at a live boundary
 
 `task --id <story-id> --status PARKED --note "<the blocker that parked it>"` —

@@ -35,11 +35,13 @@ def build_parser() -> argparse.ArgumentParser:
     _add_artifact(subparsers)
     _add_gate(subparsers)
     _add_block(subparsers)
+    _add_decide(subparsers)
     _add_task(subparsers)
     _add_tasks(subparsers)
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
     _add_commit_scope_guard(subparsers)
+    _add_conductor_commit_guard(subparsers)
     _add_replan_guard(subparsers)
     _add_artifact_guard(subparsers)
     _add_package(subparsers)
@@ -47,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
+    _add_action(subparsers)
     _add_review(subparsers)
     _add_config(subparsers)
     return parser
@@ -119,11 +122,17 @@ def _add_gate(subparsers) -> None:
     sub.add_argument("--id", required=True, choices=["G1", "G2", "G3"], dest="gate_id")
     sub.add_argument("--decision", required=True, choices=["approved", "rejected", "replan"])
     sub.add_argument("--response", required=True, help="the operator's verbatim response (may be empty)")
+    sub.add_argument(
+        "--batched",
+        action="store_true",
+        help="this answer accepted several recommendations at once, rather than being reasoned "
+             "individually (SK-133)",
+    )
     sub.set_defaults(func=_cmd_gate)
 
 
 def _cmd_gate(args) -> int:
-    commands.record_gate(args.gate_id, args.decision, args.response)
+    commands.record_gate(args.gate_id, args.decision, args.response, batched=args.batched)
     print(f"recorded {args.gate_id}: {args.decision}")
     return 0
 
@@ -147,6 +156,28 @@ def _add_block(subparsers) -> None:
 def _cmd_block(args) -> int:
     commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
     print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
+    return 0
+
+
+def _add_decide(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "decide", help="record which option the operator chose for a recorded blocker"
+    )
+    sub.add_argument("--task", required=True, dest="task_id", help="the blocked story id")
+    sub.add_argument("--option", required=True, help="the chosen option's label, e.g. '(a)'")
+    sub.add_argument("--response", required=True, help="the operator's answer, verbatim")
+    sub.add_argument(
+        "--batched",
+        action="store_true",
+        help="this answer accepted several recommendations at once, rather than being reasoned "
+             "individually (SK-133)",
+    )
+    sub.set_defaults(func=_cmd_decide)
+
+
+def _cmd_decide(args) -> int:
+    commands.record_decision(args.task_id, args.option, args.response, batched=args.batched)
+    print(f"recorded decision: {args.task_id} chose {args.option}")
     return 0
 
 
@@ -239,6 +270,31 @@ def _cmd_commit_scope_guard(args) -> int:
         print(commit_scope.refusal(foreign, args.before, args.after), file=sys.stderr)
         return 1
     print(f"commit-scope-guard: no foreign state in {args.before.strip()}..{args.after.strip()}")
+    return 0
+
+
+def _add_conductor_commit_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "conductor-commit-guard",
+        help="may the conductor stage these paths, or do they carry foreign state? exit 1 = refuse",
+    )
+    sub.add_argument(
+        "--path",
+        required=True,
+        action="append",
+        dest="paths",
+        help="a path the conductor is about to stage; repeat the flag once per path",
+    )
+    sub.set_defaults(func=_cmd_conductor_commit_guard)
+
+
+def _cmd_conductor_commit_guard(args) -> int:
+    # a pure string check on a set that is not committed yet: no repo, no state, no git
+    foreign = commit_scope.guard_conductor_commit(args.paths)
+    if foreign:
+        print(commit_scope.conductor_refusal(foreign), file=sys.stderr)
+        return 1
+    print(f"conductor-commit-guard: none of the {len(args.paths)} paths carry foreign state")
     return 0
 
 
@@ -451,6 +507,36 @@ def _cmd_cost(args) -> int:
     where = f"{args.stage}/{args.label}" if args.label else args.stage
     marker = " (estimated)" if args.estimated else ""
     print(f"recorded cost: {where} tokens={args.tokens}{marker}")
+    return 0
+
+
+def _add_action(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "action", help="record one action the conductor took on the operator's behalf"
+    )
+    sub.add_argument("--stop", required=True, dest="stop_id", help="the stop id from stop_classes.STOPS")
+    sub.add_argument("--command", required=True, help="the exact command that was run")
+    sub.add_argument("--sha", help="the resulting commit SHA, when the action produced one")
+    sub.add_argument("--result", default="ok", help="ok | failed")
+    sub.add_argument(
+        "--operator-answered",
+        action="store_true",
+        dest="operator_answered",
+        help="a real, non-empty answer came back from an operator this run (SK-136); "
+             "without it this verb refuses, because an empty answer is not consent",
+    )
+    sub.set_defaults(func=_cmd_action)
+
+
+def _cmd_action(args) -> int:
+    commands.record_action(
+        args.stop_id,
+        args.command,
+        operator_answered=args.operator_answered,
+        result=args.result,
+        sha=args.sha,
+    )
+    print(f"recorded action: {args.stop_id} result={args.result}")
     return 0
 
 

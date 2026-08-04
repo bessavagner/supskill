@@ -60,6 +60,36 @@ def test_the_refusal_lists_the_paths_and_refuses_to_stage_them():
     assert "G3 is still open" in text
 
 
+def test_no_guard_text_still_claims_supskill_never_runs_a_repo_changing_git_command():
+    """C2: true before E10, false at this seam after it.
+
+    `artifact-guard.untracked` is remediable now: SKILL.md's Gate 3 has the conductor
+    stage and commit exactly these paths. A refusal relayed verbatim that says supskill
+    runs no such command tells the operator to do the thing the conductor just did.
+    """
+    scripts = Path(__file__).resolve().parent.parent / "scripts" / "supskill_state"
+    for module in sorted(scripts.glob("*.py")):
+        text = module.read_text(encoding="utf-8")
+        assert "runs no git command" not in text, f"{module.name} still makes the pre-E10 claim"
+
+
+def test_the_refusal_names_the_remediable_stop_and_its_recording_verb():
+    text = refusal(["docs/sprints/sprint-s6.md"])
+    assert "artifact-guard.untracked" in text
+    assert "remediable" in text
+    assert "action --stop artifact-guard.untracked" in text
+
+
+def test_the_conventions_bullet_carves_out_remediable_stops():
+    """C2: "never work around a refusal" with no exception never reaches the remediation."""
+    skill = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "SKILL.md"
+    text = skill.read_text(encoding="utf-8")
+    start = text.index("never work around a refusal")
+    bullet = text[start : text.index("\n- ", start)]
+    assert "remediable" in bullet
+    assert "references/stop-classes.md" in bullet
+
+
 def test_the_refusal_on_no_paths_raises():
     with pytest.raises(StateError, match="nothing to refuse"):
         refusal([])
