@@ -31,6 +31,8 @@ Recorded here rather than by editing the backlog rows, per this project's conven
 
 3. **SK-136 ships as a parameter of `record_action`, not a helper — and there is no Task for it.** As filed and as specified it was `preflight.interactive_refusal(answered)`, a boolean guard returning a constant string; the design doc already called it the epic's weakest part, and a review rubric would rightly flag a function that adds no behaviour. Decided with the operator before execution: `record_action` takes a keyword-only `operator_answered` with **no default**, refuses when it is false, and writes the attestation onto the row. A caller that forgets it raises; the CLI refuses without `--operator-answered`. A trail-derived check (require a prior non-empty gate or decision response this run) was designed and rejected: the first remediable action is the `init --archive` at run-checklist step 3, in a brand-new sprint before G1 exists, so it would block exactly the case the epic exists for. This remains conductor-attested — F-4's ceiling is not removable — but the refusal is now a mechanism and the claim is auditable per action. SK-131 and SK-136 are therefore one task (Task 2) with a two-story heading.
 
+4. **The decision row's discriminator is `row`, not `kind`.** The plan originally specified `{"kind": "decision", ...}`. Task 3's reviewer found — and the controller reproduced — that `blockers.jsonl` already uses `kind` for a blocker's own **free-text** classification (`--kind` has no allow-list; `Blocker.kind: str`). So `block --kind decision` writes a *blocker* row that satisfies the decision-row filter, and `record['option']` then raises `KeyError`, which `main()` does not catch — a raw traceback instead of a clean refusal, in a project whose posture is that refusals are clean and verbatim. Hardening the reader was rejected as a fix: Task 4's `_blocker_decisions` applies the same filter, so the collision would have to be defended against by every future reader. Renaming the discriminator fixes it once at the source. Decided with the operator when the finding was raised as plan-mandated; free to change because nothing has shipped and the branch is unreleased, so no trail needs migrating.
+
 ---
 
 ### Task 1: The stop classification table (SK-130)
@@ -603,7 +605,7 @@ at run-checklist step 3, before any gate exists in the new sprint."
 
 **Interfaces:**
 - Consumes: `_OPTION_LABEL` (`commands.py:411`), `Blocker` (`model.py`).
-- Produces: `commands.record_decision(task_id: str, option: str, response: str, *, batched: bool = False, root: Path | None = None) -> None`, appending a `{"kind": "decision", ...}` row to `runs/<id>/blockers.jsonl`. Task 4 adds `batched`. Task 4 also surfaces it in `show`.
+- Produces: `commands.record_decision(task_id: str, option: str, response: str, *, batched: bool = False, root: Path | None = None) -> None`, appending a `{"row": "decision", ...}` row to `runs/<id>/blockers.jsonl`. Task 4 adds `batched`. Task 4 also surfaces it in `show`.
 
 **Design note — read before implementing.** This records **which option was chosen**, not **whether the blocker is resolved**. SK-103's derivation (`blockers.py`) still owns resolution, because a second independent mover could disagree with the task's status and leave Gate 3 with two answers and no rule. One source per question.
 
@@ -655,7 +657,7 @@ def blocked(tmp_path, monkeypatch):
 def test_records_the_chosen_option_and_the_operator_response_verbatim(blocked):
     record_decision("SK-001", "(a)", "go with (a), the transport is the actual defect", root=blocked)
 
-    decisions = [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"]
+    decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
     assert len(decisions) == 1
     assert decisions[0]["task"] == "SK-001"
     assert decisions[0]["option"] == "a"
@@ -668,14 +670,14 @@ def test_refuses_an_option_label_the_blocker_never_offered(blocked):
     with pytest.raises(StateError, match="never offered"):
         record_decision("SK-001", "(c)", "go with c", root=blocked)
 
-    assert [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"] == []
+    assert [r for r in _blocker_rows(blocked) if r.get("row") == "decision"] == []
 
 
 def test_refuses_an_empty_response(blocked):
     with pytest.raises(StateError, match="--response"):
         record_decision("SK-001", "(a)", "   ", root=blocked)
 
-    assert [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"] == []
+    assert [r for r in _blocker_rows(blocked) if r.get("row") == "decision"] == []
 
 
 def test_refuses_a_task_with_no_recorded_blocker(blocked):
@@ -773,7 +775,7 @@ def record_decision(
     sprint_dir = normalize_sprint_id(state.sprint.id)
     blockers_file = store.runs_dir(root) / sprint_dir / "blockers.jsonl"
     for record in _jsonl_records(blockers_file):
-        if record.get("kind") == "decision" and record.get("task") == task_id:
+        if record.get("row") == "decision" and record.get("task") == task_id:
             raise StateError(
                 f"{task_id} was already decided as ({record['option']}); "
                 "the trail is append-only and a decision is not re-taken"
@@ -782,7 +784,7 @@ def record_decision(
     store.append_jsonl(
         blockers_file,
         {
-            "kind": "decision",
+            "row": "decision",
             "task": task_id,
             "option": label,
             "response": response,
@@ -802,7 +804,7 @@ Expected: PASS
 - [ ] **Step 6: Confirm existing blocker tests still pass**
 
 Run: `uv run pytest tests/test_block.py tests/test_blockers_resolved.py tests/test_blocker_headings.py tests/test_show.py -v`
-Expected: PASS. The new rows carry `kind: "decision"`; existing readers must skip them. If any existing reader chokes on a row without `options`, add the `kind` filter there and note it in the commit.
+Expected: PASS. The new rows carry `row: "decision"`; existing readers must skip them. If any existing reader chokes on a row without `options`, add the `kind` filter there and note it in the commit.
 
 - [ ] **Step 7: Add the CLI verb**
 
@@ -886,7 +888,7 @@ Append to `tests/test_decide.py`:
 def test_a_batched_decision_says_so(blocked):
     record_decision("SK-001", "(a)", "go with your recommendations on all three", batched=True, root=blocked)
 
-    decisions = [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"]
+    decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
     assert decisions[0]["batched"] is True
 
 
@@ -942,7 +944,7 @@ def _blocker_decisions(root: Path, sprint_id: str) -> dict[str, dict]:
     path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
     found: dict[str, dict] = {}
     for record in _jsonl_records(path):
-        if record.get("kind") == "decision":
+        if record.get("row") == "decision":
             found[record["task"]] = record
     return found
 ```
