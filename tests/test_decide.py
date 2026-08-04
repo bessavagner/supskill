@@ -158,3 +158,20 @@ def test_show_json_surfaces_the_decision_beside_resolved_by(blocked):
     assert entry["decision"] == "a"
     assert entry["batched"] is False
     assert entry["resolved_by"] is None  # answered, not settled
+
+
+def test_gate_three_prose_tells_the_conductor_to_run_decide():
+    """I1: a verb no runtime instruction invokes is, from the operator's seat, no verb.
+
+    Without this, `derived.blockers.*.decision` is null on every real run and
+    `_blocker_decisions` is dead code outside the test suite.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    skill = (root / "skills" / "supskill" / "SKILL.md").read_text(encoding="utf-8")
+    start = skill.index("## Gate 3")
+    section = skill[start : skill.index("\n## ", start + 1)]
+    assert "decide --task" in section
+    assert "--option" in section
+    assert "--response" in section
