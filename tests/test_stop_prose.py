@@ -16,6 +16,61 @@ def test_the_reference_names_every_stop():
             assert stop.id in text, f"{stop.id} is missing from stop-classes.md"
 
 
+def test_the_reference_copies_every_condition_verbatim():
+    """I6: ids matching is not the drift that bit this branch - conditions are.
+
+    stop-classes.md says its conditions are "copied verbatim from stop_classes.STOPS".
+    Asserting only the id lets either side be edited alone, which is the exact defect
+    class divergence 6 had to repair mid-run (prose said "G3 is null", the code says
+    "REVIEW and G3 is null").
+    """
+    text = REFERENCE.read_text(encoding="utf-8")
+    for stop in stop_classes.STOPS:
+        if stop.stop_class != stop_classes.NO_STOP:
+            assert stop.condition in text, f"{stop.id}'s condition drifted from stop-classes.md"
+
+
+def test_every_remediable_stop_has_a_prose_caller():
+    """I6: the branch's dominant structural defect - surface nothing tells the conductor to use.
+
+    A remediable stop with no `action --stop <id>` anywhere in the runtime prose is a
+    stop that classifies as remediable and is never remediated, which is how SK-132 and
+    SK-133 shipped unwired. `replan-guard.writeback-uncommitted` was added at the very
+    end of the branch precisely because this gap was noticed by hand.
+    """
+    # stop-classes.md is excluded on purpose: its own table names every remediable
+    # stop's recording command by construction, so including it would make this pass
+    # for a stop no stage ever reaches. The caller has to be at a runtime site.
+    prose = SKILL.read_text(encoding="utf-8")
+    for path in sorted(REFERENCE.parent.glob("*.md")):
+        if path != REFERENCE:
+            prose += path.read_text(encoding="utf-8")
+    for stop in stop_classes.STOPS:
+        if stop.stop_class == stop_classes.REMEDIABLE:
+            assert f"action --stop {stop.id}" in prose, f"{stop.id} is remediable but nothing runs it"
+
+
+def test_skill_step_three_keys_on_stage_and_gate_the_way_the_code_does():
+    """I6: `_undecided_review_refusal` fires only when stage is REVIEW AND G3 is null.
+
+    Divergence 6: prose that keyed on the gate alone sent the conductor to "refuse and
+    stop" in cases the CLI would have archived. Correct today, and unprotected until
+    this test - the condition lives in two files and only one of them is executable.
+    """
+    text = SKILL.read_text(encoding="utf-8")
+    start = text.index("3. **Compare ids.**")
+    step_three = text[start : text.index("\n4. **", start)]
+    branches = step_three.split("\n   - ")[1:]
+    keyed = [b for b in branches if "init.archive.decided" in b or "init.archive.undecided" in b]
+    assert len(keyed) == 2, "step 3 should split the id mismatch into exactly two branches"
+    for branch in keyed:
+        # both sides of the split state both halves of the condition, or the split has
+        # drifted back to keying on the gate alone
+        assert "REVIEW" in branch, branch
+        assert "gates.G3_review" in branch, branch
+        assert "null" in branch, branch
+
+
 def test_skill_no_longer_forbids_archive_outright():
     text = SKILL.read_text(encoding="utf-8")
     assert "**Never pass `--archive`.**" not in text
