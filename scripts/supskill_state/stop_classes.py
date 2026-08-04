@@ -100,6 +100,7 @@ STOPS: tuple[Stop, ...] = (
     Stop(id="worktree.none", verb="worktree", condition="creates the dispatch root", stop_class=NO_STOP),
     Stop(id="cost.none", verb="cost", condition="records telemetry", stop_class=NO_STOP),
     Stop(id="review.none", verb="review", condition="records a finding", stop_class=NO_STOP),
+    Stop(id="action.none", verb="action", condition="records an action", stop_class=NO_STOP),
 )
 
 

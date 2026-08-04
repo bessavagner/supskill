@@ -15,7 +15,7 @@ from collections import Counter
 from pathlib import Path
 
 from . import blockers as blockers_view
-from . import config, store
+from . import config, stop_classes, store
 from .errors import StateError
 from .model import (
     ARTIFACT_KEYS,
@@ -673,6 +673,69 @@ def record_cost(
             "tool_uses": tool_uses,
             "duration_ms": duration_ms,
             "estimated": estimated,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
+def record_action(
+    stop_id: str,
+    command: str,
+    *,
+    operator_answered: bool,
+    result: str = "ok",
+    sha: str | None = None,
+    root: Path | None = None,
+) -> None:
+    """Record one action the conductor took on the operator's behalf (SK-131).
+
+    Only a `remediable` stop may produce one: an evidential stop is a refusal, and
+    a refusal that writes an action record would be claiming it fixed the thing it
+    was built to surface.
+
+    `reason` is copied from the classification table's own `condition`, never
+    supplied by the caller - the record says why the stop fired, not why the
+    conductor felt like acting.
+
+    `operator_answered` is SK-136: a run that cannot reach an operator does not act
+    on their behalf. AskUserQuestion auto-resolves with an EMPTY answer in ~37ms in
+    headless runs (D4), so before E10 that cost a missing record and here it would
+    cost an executed action nobody chose. It is keyword-only with NO default, so a
+    caller that forgets it raises rather than silently acting, and the attestation is
+    written onto the row so a later reader can see what was claimed.
+
+    The ceiling, stated plainly: this records what the conductor attests, not what a
+    human did - F-4 applies here exactly as it applies to the gates.
+
+    Pure telemetry in the same sense as record_cost: state.json never changes.
+    """
+    root = store.resolve_root(root)
+    stop = stop_classes.classify(stop_id)  # refuses an unknown id, writing nothing
+    if not operator_answered:
+        raise StateError(
+            "this run has not received a non-empty answer from an operator, so it will not act "
+            "on one's behalf: AskUserQuestion auto-resolves with an empty answer in headless runs, "
+            "and an empty answer is not consent. Nothing was recorded and nothing was executed."
+        )
+    if stop.stop_class != stop_classes.REMEDIABLE:
+        raise StateError(
+            f"{stop_id} is {stop.stop_class}, not remediable - it is a refusal to relay, "
+            "not an action to take"
+        )
+    if not command.strip():
+        raise StateError("an action record requires a non-empty --command")
+
+    state = store.load_state(store.state_path(root))
+    actions_file = store.runs_dir(root) / normalize_sprint_id(state.sprint.id) / "actions.jsonl"
+    store.append_jsonl(
+        actions_file,
+        {
+            "stop": stop.id,
+            "reason": stop.condition,
+            "command": command,
+            "sha": sha,
+            "result": result,
+            "operator_answered": operator_answered,  # SK-136: attested, not inferred
             "at": store.now_utc_iso(),
         },
     )

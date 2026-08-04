@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_preflight(subparsers)
     _add_worktree(subparsers)
     _add_cost(subparsers)
+    _add_action(subparsers)
     _add_review(subparsers)
     _add_config(subparsers)
     return parser
@@ -451,6 +452,36 @@ def _cmd_cost(args) -> int:
     where = f"{args.stage}/{args.label}" if args.label else args.stage
     marker = " (estimated)" if args.estimated else ""
     print(f"recorded cost: {where} tokens={args.tokens}{marker}")
+    return 0
+
+
+def _add_action(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "action", help="record one action the conductor took on the operator's behalf"
+    )
+    sub.add_argument("--stop", required=True, dest="stop_id", help="the stop id from stop_classes.STOPS")
+    sub.add_argument("--command", required=True, help="the exact command that was run")
+    sub.add_argument("--sha", help="the resulting commit SHA, when the action produced one")
+    sub.add_argument("--result", default="ok", help="ok | failed")
+    sub.add_argument(
+        "--operator-answered",
+        action="store_true",
+        dest="operator_answered",
+        help="a real, non-empty answer came back from an operator this run (SK-136); "
+             "without it this verb refuses, because an empty answer is not consent",
+    )
+    sub.set_defaults(func=_cmd_action)
+
+
+def _cmd_action(args) -> int:
+    commands.record_action(
+        args.stop_id,
+        args.command,
+        operator_answered=args.operator_answered,
+        result=args.result,
+        sha=args.sha,
+    )
+    print(f"recorded action: {args.stop_id} result={args.result}")
     return 0
 
 
