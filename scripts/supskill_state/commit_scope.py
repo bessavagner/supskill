@@ -90,6 +90,30 @@ def guard_conductor_commit(paths: Iterable[str]) -> list[str]:
     return foreign_paths(paths)
 
 
+def conductor_refusal(foreign: list[str]) -> str:
+    """What the conductor reports, verbatim, when its OWN staged set carries foreign state.
+
+    `refusal` names a committed range and tells the operator to reset it; there is
+    nothing to reset here, because this runs before the commit. So this names the
+    paths, the prefix that caught them, and stops - the conductor's remediable action
+    at that seam (`artifact-guard.untracked`, `replan-guard.writeback-uncommitted`)
+    does not extend to a path on the denylist, and nothing is recorded.
+    """
+    if not foreign:
+        raise StateError("conductor_refusal() called with no foreign paths; there is nothing to refuse")
+    listed = "\n".join(f"    {path}" for path in foreign)
+    prefixes = ", ".join(FOREIGN_PREFIXES)
+    return (
+        "these paths are not the conductor's to commit - they belong to a harness or to "
+        "supskill's own state, never to a sprint's deliverables:\n"
+        f"{listed}\n"
+        f"The denylist is dir-anchored: {prefixes}. This is commit-scope-guard.foreign's shape "
+        "reached before the commit rather than after it, so there is nothing to reset - stage "
+        "nothing, commit nothing, and relay this with the path and its prefix named.\n"
+        "Nothing was recorded: no action row, and the gate this ran before is still open."
+    )
+
+
 def refusal(foreign: list[str], before: str, after: str) -> str:
     """What the conductor reports, verbatim, when a task's commits carry foreign state."""
     if not foreign:

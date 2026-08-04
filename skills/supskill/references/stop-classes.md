@@ -46,25 +46,21 @@ replan-shapes.md](replan-shapes.md).
 
 `artifact-guard.untracked`'s action is the one case where the conductor
 stages files nobody has committed yet, so the foreign-state check has to
-run before the commit rather than after it. `commit_scope.guard_conductor_commit`
-is that check (SK-134): the same denylist `commit-scope-guard` already
-refuses on — `.omc/`, `.superpowers/`, `.supskill/`, `.codegraph/` — applied
-to the staged set of paths instead of a committed `BASE..HEAD` range. Run it
-from the repo root:
+run before the commit rather than after it. `conductor-commit-guard` is that
+check (SK-134): the same denylist `commit-scope-guard` already refuses on —
+`.omc/`, `.superpowers/`, `.supskill/`, `.codegraph/` — applied to the set of
+paths you are about to stage instead of a committed `BASE..HEAD` range. It
+reads no state and asks git nothing; run it from the repo root, one `--path`
+per path:
 
-    python3 -c "
-    import sys
-    sys.path.insert(0, '${CLAUDE_PLUGIN_ROOT}/scripts')
-    from supskill_state.commit_scope import guard_conductor_commit
-    print(guard_conductor_commit(sys.argv[1:]))
-    " <untracked artifact path> [<untracked artifact path> ...]
+    ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state conductor-commit-guard --path <untracked artifact path> [--path <path> ...]
 
-An empty list back → the paths are clean: `git add <path> [<path> ...] &&
-git commit -m "docs: track sprint artifacts"`, keep the SHA (`git rev-parse
-HEAD`), then record the action above. A non-empty list is
-`commit-scope-guard.foreign`'s shape reached through a different door:
-relay which path and its prefix, and stop — that commit is not yours to
-make, and nothing is recorded.
+Exit 0 → the paths are clean: `git add <path> [<path> ...] && git commit -m
+"docs: track sprint artifacts"`, keep the SHA (`git rev-parse HEAD`), then
+record the action above. Exit 1 is `conductor-commit-guard.foreign`, which is
+`commit-scope-guard.foreign`'s shape reached before the commit rather than
+after it: relay the refusal verbatim — it names the path and its prefix — and
+stop. That commit is not yours to make, and nothing is recorded.
 
 ## Evidential — relayed verbatim, never acted on
 
@@ -74,10 +70,11 @@ make, and nothing is recorded.
 | `review-guard.stale` | HEAD moved past the recorded package, or none was recorded |
 | `plan-guard.commits` | the plan agent produced commits |
 | `commit-scope-guard.foreign` | a commit range swept foreign harness state in |
+| `conductor-commit-guard.foreign` | a path the conductor is about to stage lies under a foreign-state prefix |
 | `replan-guard.north-star` | the shape reads as a north-star reset (invariant 7) |
 | `preflight.unresolvable` | a skill a later stage dispatches will not resolve |
 | `tasks.coverage` | the dev plan does not cover the sprint doc's stories |
 
-Every one of these seven is a refusal the conductor relays and stops on —
+Every one of these eight is a refusal the conductor relays and stops on —
 never a command it runs, never an `action` it records. Acting on any of
 them would destroy the signal it exists to raise.

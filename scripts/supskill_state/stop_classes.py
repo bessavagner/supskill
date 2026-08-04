@@ -72,6 +72,12 @@ STOPS: tuple[Stop, ...] = (
         stop_class=EVIDENTIAL,
     ),
     Stop(
+        id="conductor-commit-guard.foreign",
+        verb="conductor-commit-guard",
+        condition="a path the conductor is about to stage lies under a foreign-state prefix",
+        stop_class=EVIDENTIAL,
+    ),
+    Stop(
         id="replan-guard.writeback-uncommitted",
         verb="replan-guard",
         condition="a Shape-1 backlog writeback this run applied is still uncommitted",

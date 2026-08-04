@@ -150,3 +150,54 @@ def test_the_conductor_guard_uses_the_same_denylist_as_the_task_guard():
 
     for prefix in FOREIGN_PREFIXES:
         assert guard_conductor_commit([f"{prefix}x"]) == [f"{prefix}x"]
+
+
+def test_cli_conductor_commit_guard_passes_a_clean_set(tmp_path, monkeypatch, capsys):
+    """I5: the guard the conductor types by hand at Gate 3 is a verb a test can execute."""
+    monkeypatch.chdir(tmp_path)  # reads no state and asks git nothing
+    code = main([
+        "conductor-commit-guard",
+        "--path", "docs/sprints/backlog-01/sprint-s9.md",
+        "--path", "docs/superpowers/plans/2026-08-04-sprint-s9.md",
+    ])
+    assert code == 0
+    assert "no" in capsys.readouterr().out.lower()
+
+
+def test_cli_conductor_commit_guard_refuses_a_foreign_path(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    code = main(["conductor-commit-guard", "--path", "backlog.md", "--path", ".supskill/state.json"])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert ".supskill/state.json" in err
+    assert ".supskill/" in err  # the prefix that caught it, named
+    assert "backlog.md" not in err.replace(".supskill/state.json", "")  # only the offender
+
+
+def test_cli_conductor_commit_guard_refuses_every_denylisted_prefix(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    for prefix in FOREIGN_PREFIXES:
+        assert main(["conductor-commit-guard", "--path", f"{prefix}x"]) == 1
+        assert f"{prefix}x" in capsys.readouterr().err
+
+
+def test_the_conductor_refusal_on_no_paths_raises():
+    from supskill_state.commit_scope import conductor_refusal
+
+    with pytest.raises(StateError, match="nothing to refuse"):
+        conductor_refusal([])
+
+
+def test_the_documented_invocation_is_the_verb_not_a_python_one_liner():
+    """I5: prose typed by hand mid-run must name a command a test executes.
+
+    ${CLAUDE_PLUGIN_ROOT} is wiped on every plugin update and the Conventions say the
+    CLI is always invoked as .../supskill-state; a second, differently-shaped door into
+    the same package was the only guard invocation no test ran.
+    """
+    references = Path(__file__).resolve().parent.parent / "skills" / "supskill" / "references"
+    for name in ("stop-classes.md", "replan-shapes.md"):
+        text = (references / name).read_text(encoding="utf-8")
+        assert "supskill-state conductor-commit-guard --path" in text, name
+        assert "from supskill_state.commit_scope import" not in text, name
+        assert "sys.path.insert" not in text, name

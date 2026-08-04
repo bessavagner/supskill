@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_advance(subparsers)
     _add_plan_guard(subparsers)
     _add_commit_scope_guard(subparsers)
+    _add_conductor_commit_guard(subparsers)
     _add_replan_guard(subparsers)
     _add_artifact_guard(subparsers)
     _add_package(subparsers)
@@ -269,6 +270,31 @@ def _cmd_commit_scope_guard(args) -> int:
         print(commit_scope.refusal(foreign, args.before, args.after), file=sys.stderr)
         return 1
     print(f"commit-scope-guard: no foreign state in {args.before.strip()}..{args.after.strip()}")
+    return 0
+
+
+def _add_conductor_commit_guard(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "conductor-commit-guard",
+        help="may the conductor stage these paths, or do they carry foreign state? exit 1 = refuse",
+    )
+    sub.add_argument(
+        "--path",
+        required=True,
+        action="append",
+        dest="paths",
+        help="a path the conductor is about to stage; repeat the flag once per path",
+    )
+    sub.set_defaults(func=_cmd_conductor_commit_guard)
+
+
+def _cmd_conductor_commit_guard(args) -> int:
+    # a pure string check on a set that is not committed yet: no repo, no state, no git
+    foreign = commit_scope.guard_conductor_commit(args.paths)
+    if foreign:
+        print(commit_scope.conductor_refusal(foreign), file=sys.stderr)
+        return 1
+    print(f"conductor-commit-guard: none of the {len(args.paths)} paths carry foreign state")
     return 0
 
 

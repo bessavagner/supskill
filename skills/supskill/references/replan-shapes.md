@@ -20,12 +20,16 @@ already edited it this way, by hand, in a `docs:` commit.
 
 After the writeback, this is `replan-guard.writeback-uncommitted`
 ([stop-classes.md](stop-classes.md)): a backlog writeback this
-run applied and has not yet committed. Check `backlog.md` against
-`guard_conductor_commit`'s denylist exactly as `artifact-guard.untracked`
-does ([stop-classes.md](stop-classes.md) has the invocation) — it never
-matches for a plain `backlog.md` path, but the check runs regardless, same
-as every other conductor commit. Clean → commit exactly the backlog path
-just written, nothing else:
+run applied and has not yet committed. Check `backlog.md` against the
+conductor-commit denylist exactly as `artifact-guard.untracked` does:
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state conductor-commit-guard --path <the backlog path>
+
+It never matches for a plain `backlog.md` path, but the check runs
+regardless, same as every other conductor commit; exit 1 is
+`conductor-commit-guard.foreign` ([stop-classes.md](stop-classes.md)) —
+relay it and stop. Exit 0 → commit exactly the backlog path just written,
+nothing else:
 
     git add backlog.md && git commit -m "docs: backlog delta from <sprint-id>'s replan"
 
