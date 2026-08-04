@@ -29,6 +29,8 @@ Recorded here rather than by editing the backlog rows, per this project's conven
 
 2. **SK-132 records the decision, not the resolution.** The spec says `show` should "derive resolution from the decision rather than inferring it from task status." Implementing that literally would reintroduce exactly what `blockers.py`'s module docstring warns against: *"a second verb that could move a blocker independently could also disagree with its task, and then Gate 3 would have two answers and no rule for picking one."* So `decide` records **which option was chosen**, and SK-103's derivation still decides **whether the blocker is resolved**. `derived.blockers.*` gains a `decision` field beside the existing `resolved_by`. One source per question: the trail says what was chosen, the task status says whether it settled.
 
+3. **SK-136 ships as a parameter of `record_action`, not a helper — and there is no Task for it.** As filed and as specified it was `preflight.interactive_refusal(answered)`, a boolean guard returning a constant string; the design doc already called it the epic's weakest part, and a review rubric would rightly flag a function that adds no behaviour. Decided with the operator before execution: `record_action` takes a keyword-only `operator_answered` with **no default**, refuses when it is false, and writes the attestation onto the row. A caller that forgets it raises; the CLI refuses without `--operator-answered`. A trail-derived check (require a prior non-empty gate or decision response this run) was designed and rejected: the first remediable action is the `init --archive` at run-checklist step 3, in a brand-new sprint before G1 exists, so it would block exactly the case the epic exists for. This remains conductor-attested — F-4's ceiling is not removable — but the refusal is now a mechanism and the claim is auditable per action. SK-131 and SK-136 are therefore one task (Task 2) with a two-story heading.
+
 ---
 
 ### Task 1: The stop classification table (SK-130)
@@ -39,7 +41,7 @@ Recorded here rather than by editing the backlog rows, per this project's conven
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `StopClass` (str enum-like constants `REMEDIABLE`, `EVIDENTIAL`, `NO_STOP`); `STOPS: tuple[Stop, ...]`; `Stop` dataclass with fields `id: str`, `verb: str`, `condition: str`, `stop_class: str`, `action: str | None`; `classify(stop_id: str) -> Stop`; `verbs_covered() -> set[str]`. Task 2 and Task 6 import `classify`.
+- Produces: `StopClass` (str enum-like constants `REMEDIABLE`, `EVIDENTIAL`, `NO_STOP`); `STOPS: tuple[Stop, ...]`; `Stop` dataclass with fields `id: str`, `verb: str`, `condition: str`, `stop_class: str`, `action: str | None`; `classify(stop_id: str) -> Stop`; `verbs_covered() -> set[str]`. Task 2 and Task 6 read `STOPS`; Task 2 imports `classify`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -266,7 +268,7 @@ they exist to raise."
 
 ---
 
-### Task 2: `actions.jsonl` and the `action` verb (SK-131)
+### Task 2: `actions.jsonl`, the `action` verb, and its consent gate (SK-131, SK-136)
 
 **Files:**
 - Modify: `scripts/supskill_state/commands.py`
@@ -275,7 +277,8 @@ they exist to raise."
 
 **Interfaces:**
 - Consumes: `stop_classes.classify` from Task 1.
-- Produces: `commands.record_action(stop_id: str, command: str, *, result: str = "ok", sha: str | None = None, root: Path | None = None) -> None`, appending to `runs/<id>/actions.jsonl`. Task 5 calls it after a conductor commit.
+- Produces: `commands.record_action(stop_id: str, command: str, *, operator_answered: bool, result: str = "ok", sha: str | None = None, root: Path | None = None) -> None`, appending to `runs/<id>/actions.jsonl`. Task 5 calls it after a conductor commit.
+- **SK-136 lives here, not in a helper.** `operator_answered` is keyword-only and has **no default**, so every caller must state it and the CLI refuses without `--operator-answered`. A trail-derived check was considered and rejected: the first remediable action is the `init --archive` at run-checklist step 3, in a brand-new sprint before G1 exists, so deriving consent from a prior gate row would block exactly the case this epic exists for. This stays conductor-attested — F-4's ceiling — but the refusal is mechanical and the claim is recorded per action instead of living only in prose.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -309,6 +312,7 @@ def test_records_the_stop_its_reason_and_the_exact_command(tmp_path):
     record_action(
         "artifact-guard.untracked",
         "git add docs/a.md docs/b.md && git commit -m 'docs: track sprint artifacts'",
+        operator_answered=True,
         sha="0173092",
         root=tmp_path,
     )
@@ -327,7 +331,7 @@ def test_state_json_is_untouched(tmp_path):
     init_sprint("s10", backlog="backlog.md", root=tmp_path)
     before = state_path(tmp_path).read_bytes()
 
-    record_action("artifact-guard.untracked", "git add docs/a.md", root=tmp_path)
+    record_action("artifact-guard.untracked", "git add docs/a.md", operator_answered=True, root=tmp_path)
 
     assert state_path(tmp_path).read_bytes() == before
 
@@ -336,7 +340,7 @@ def test_refuses_an_evidential_stop_and_writes_nothing(tmp_path):
     init_sprint("s10", backlog="backlog.md", root=tmp_path)
 
     with pytest.raises(StateError, match="evidential"):
-        record_action("review-guard.stale", "git diff > pkg.diff", root=tmp_path)
+        record_action("review-guard.stale", "git diff > pkg.diff", operator_answered=True, root=tmp_path)
 
     assert _actions(tmp_path) == []
 
@@ -345,16 +349,44 @@ def test_refuses_an_unknown_stop_id_and_writes_nothing(tmp_path):
     init_sprint("s10", backlog="backlog.md", root=tmp_path)
 
     with pytest.raises(StateError):
-        record_action("no-such-stop", "true", root=tmp_path)
+        record_action("no-such-stop", "true", operator_answered=True, root=tmp_path)
 
     assert _actions(tmp_path) == []
+
+
+def test_refuses_when_no_operator_answered_this_run(tmp_path):
+    """SK-136: a run that cannot ask does not act on an operator's behalf."""
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    with pytest.raises(StateError, match="operator"):
+        record_action(
+            "artifact-guard.untracked", "git add a", operator_answered=False, root=tmp_path
+        )
+
+    assert _actions(tmp_path) == []
+
+
+def test_records_the_operator_attestation_on_the_row(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_action("artifact-guard.untracked", "git add a", operator_answered=True, root=tmp_path)
+
+    assert _actions(tmp_path)[0]["operator_answered"] is True
+
+
+def test_operator_answered_is_required_not_defaulted(tmp_path):
+    """No default: a caller that forgets it fails loudly rather than silently acting."""
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    with pytest.raises(TypeError):
+        record_action("artifact-guard.untracked", "git add a", root=tmp_path)
 
 
 def test_refuses_an_empty_command(tmp_path):
     init_sprint("s10", backlog="backlog.md", root=tmp_path)
 
     with pytest.raises(StateError, match="--command"):
-        record_action("artifact-guard.untracked", "", root=tmp_path)
+        record_action("artifact-guard.untracked", "", operator_answered=True, root=tmp_path)
 
     assert _actions(tmp_path) == []
 
@@ -362,8 +394,10 @@ def test_refuses_an_empty_command(tmp_path):
 def test_appends_rather_than_replaces(tmp_path):
     init_sprint("s10", backlog="backlog.md", root=tmp_path)
 
-    record_action("artifact-guard.untracked", "git add a", root=tmp_path)
-    record_action("init.archive.decided", "supskill-state init s11 --archive", root=tmp_path)
+    record_action("artifact-guard.untracked", "git add a", operator_answered=True, root=tmp_path)
+    record_action(
+        "init.archive.decided", "supskill-state init s11 --archive", operator_answered=True, root=tmp_path
+    )
 
     assert [r["stop"] for r in _actions(tmp_path)] == [
         "artifact-guard.untracked",
@@ -391,6 +425,7 @@ def record_action(
     stop_id: str,
     command: str,
     *,
+    operator_answered: bool,
     result: str = "ok",
     sha: str | None = None,
     root: Path | None = None,
@@ -405,10 +440,26 @@ def record_action(
     supplied by the caller - the record says why the stop fired, not why the
     conductor felt like acting.
 
+    `operator_answered` is SK-136: a run that cannot reach an operator does not act
+    on their behalf. AskUserQuestion auto-resolves with an EMPTY answer in ~37ms in
+    headless runs (D4), so before E10 that cost a missing record and here it would
+    cost an executed action nobody chose. It is keyword-only with NO default, so a
+    caller that forgets it raises rather than silently acting, and the attestation is
+    written onto the row so a later reader can see what was claimed.
+
+    The ceiling, stated plainly: this records what the conductor attests, not what a
+    human did - F-4 applies here exactly as it applies to the gates.
+
     Pure telemetry in the same sense as record_cost: state.json never changes.
     """
     root = store.resolve_root(root)
     stop = stop_classes.classify(stop_id)  # refuses an unknown id, writing nothing
+    if not operator_answered:
+        raise StateError(
+            "this run has not received a non-empty answer from an operator, so it will not act "
+            "on one's behalf: AskUserQuestion auto-resolves with an empty answer in headless runs, "
+            "and an empty answer is not consent. Nothing was recorded and nothing was executed."
+        )
     if stop.stop_class != stop_classes.REMEDIABLE:
         raise StateError(
             f"{stop_id} is {stop.stop_class}, not remediable - it is a refusal to relay, "
@@ -427,6 +478,7 @@ def record_action(
             "command": command,
             "sha": sha,
             "result": result,
+            "operator_answered": operator_answered,  # SK-136: attested, not inferred
             "at": store.now_utc_iso(),
         },
     )
@@ -450,11 +502,24 @@ def _add_action(subparsers) -> None:
     sub.add_argument("--command", required=True, help="the exact command that was run")
     sub.add_argument("--sha", help="the resulting commit SHA, when the action produced one")
     sub.add_argument("--result", default="ok", help="ok | failed")
+    sub.add_argument(
+        "--operator-answered",
+        action="store_true",
+        dest="operator_answered",
+        help="a real, non-empty answer came back from an operator this run (SK-136); "
+             "without it this verb refuses, because an empty answer is not consent",
+    )
     sub.set_defaults(func=_cmd_action)
 
 
 def _cmd_action(args) -> int:
-    commands.record_action(args.stop_id, args.command, result=args.result, sha=args.sha)
+    commands.record_action(
+        args.stop_id,
+        args.command,
+        operator_answered=args.operator_answered,
+        result=args.result,
+        sha=args.sha,
+    )
     print(f"recorded action: {args.stop_id} result={args.result}")
     return 0
 ```
@@ -470,7 +535,10 @@ def test_cli_records_an_action(tmp_path, monkeypatch, capsys):
 
     from supskill_state.cli import main
 
-    exit_code = main(["action", "--stop", "artifact-guard.untracked", "--command", "git add a", "--sha", "abc1234"])
+    exit_code = main([
+        "action", "--stop", "artifact-guard.untracked", "--command", "git add a",
+        "--sha", "abc1234", "--operator-answered",
+    ])
 
     assert exit_code == 0
     assert "recorded action" in capsys.readouterr().out
@@ -483,7 +551,20 @@ def test_cli_refuses_an_evidential_stop(tmp_path, monkeypatch):
 
     from supskill_state.cli import main
 
-    assert main(["action", "--stop", "review-guard.stale", "--command", "true"]) == 1
+    assert main([
+        "action", "--stop", "review-guard.stale", "--command", "true", "--operator-answered",
+    ]) == 1
+
+
+def test_cli_refuses_without_the_operator_attestation(tmp_path, monkeypatch):
+    """SK-136: the flag is opt-in, so forgetting it fails loudly."""
+    monkeypatch.chdir(tmp_path)
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    from supskill_state.cli import main
+
+    assert main(["action", "--stop", "artifact-guard.untracked", "--command", "git add a"]) == 1
+    assert _actions(tmp_path) == []
 ```
 
 `main()` catches `StateError` and returns 1 (`cli.py:503-509`, printing `supskill-state: refused: <msg>` to stderr), so asserting `== 1` is correct.
@@ -494,7 +575,7 @@ Run: `uv run pytest -q && uv run ruff check .`
 
 ```bash
 git add scripts/supskill_state/commands.py scripts/supskill_state/cli.py tests/test_actions.py
-git commit -m "feat(SK-131): record what the conductor did on the operator's behalf
+git commit -m "feat(SK-131,SK-136): record what the conductor did, and on whose say-so
 
 runs/<id>/actions.jsonl, one append-only row per conductor-executed action.
 Only a remediable stop can produce one; an evidential stop refuses, because a
@@ -503,7 +584,13 @@ surface.
 
 reason is copied from the classification table's condition, never supplied by
 the caller. Invariant 5: a report in a conversation /clear destroys is not a
-record."
+record.
+
+SK-136 lands here rather than as a helper: operator_answered is keyword-only
+with no default, so a caller that forgets it raises, the CLI refuses without
+--operator-answered, and the attestation is written onto the row. A
+trail-derived check was rejected - the first remediable action is the archive
+at run-checklist step 3, before any gate exists in the new sprint."
 ```
 
 ---
@@ -991,97 +1078,10 @@ most reach under E10 must not be the one the guard exempts."
 
 ---
 
-### Task 6: A run that cannot ask cannot act (SK-136)
-
-**Files:**
-- Modify: `scripts/supskill_state/preflight.py`
-- Modify: `scripts/supskill_state/cli.py`
-- Create: `tests/test_interactive_precondition.py`
-
-**Interfaces:**
-- Consumes: `stop_classes` from Task 1.
-- Produces: `preflight.interactive_refusal(answered: bool) -> str | None` — the refusal text when a run has not demonstrated it can reach an operator, `None` otherwise.
-
-**Why this shape.** `record_gate` must keep accepting an empty response (`commands.py:402`, F-4), so the rule cannot be enforced inside `gate`. It is enforced one level up: the conductor proves an operator answered something before it takes any silent action. This is a precondition backed by conductor discipline, not a mechanism that makes the failure impossible — F-4's ceiling, restated one level out. That limitation is recorded in the row and in the docstring; do not write a test that claims otherwise.
-
-- [ ] **Step 1: Write the failing test**
-
-```python
-"""SK-136: a run that cannot reach an operator does not act on their behalf.
-
-D4: AskUserQuestion auto-resolves EMPTY in ~37ms headless. Before E10 that cost a
-missing record. Under E10 it would cost an executed action nobody chose.
-"""
-
-from supskill_state import preflight
-
-
-def test_a_run_that_has_not_reached_an_operator_is_refused():
-    refusal = preflight.interactive_refusal(answered=False)
-
-    assert refusal is not None
-    assert "empty" in refusal.lower()
-    assert "did not act" in refusal.lower() or "nothing was" in refusal.lower()
-
-
-def test_a_run_that_reached_an_operator_may_proceed():
-    assert preflight.interactive_refusal(answered=True) is None
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `uv run pytest tests/test_interactive_precondition.py -v`
-Expected: FAIL with `AttributeError: module 'supskill_state.preflight' has no attribute 'interactive_refusal'`
-
-- [ ] **Step 3: Implement it**
-
-```python
-def interactive_refusal(answered: bool) -> str | None:
-    """The refusal when a run has not shown it can reach an operator (SK-136).
-
-    `answered` is the conductor's own observation: did a real, non-empty answer
-    come back from the operator this run? AskUserQuestion auto-resolves with an
-    EMPTY answer in ~37ms in headless/no-TTY runs (D4), so an empty answer is
-    never consent - and under E10 an action would follow it.
-
-    The ceiling, stated plainly: this checks what the conductor reports, not what
-    a human did. F-4 applies here exactly as it applies to the gates - loud and
-    auditable, not impossible.
-    """
-    if answered:
-        return None
-    return (
-        "this run has not received a non-empty answer from an operator, so it will not act on "
-        "one's behalf: AskUserQuestion auto-resolves with an empty answer in headless runs, and an "
-        "empty answer is not consent. Nothing was recorded and nothing was executed.\n"
-        "Re-run this stage in an interactive session."
-    )
-```
-
-- [ ] **Step 4: Run the test**
-
-Run: `uv run pytest tests/test_interactive_precondition.py -v`
-Expected: PASS
-
-- [ ] **Step 5: Run everything and commit**
-
-Run: `uv run pytest -q && uv run ruff check .`
-
-```bash
-git add scripts/supskill_state/preflight.py tests/test_interactive_precondition.py
-git commit -m "feat(SK-136): a run that cannot ask does not act
-
-record_gate must keep accepting an empty response so a fabricated approval
-leaves a readable trace (F-4), so this cannot live inside gate. It lives one
-level up: the conductor proves it reached an operator before taking any silent
-action.
-
-Recorded as a precondition, not a mechanism - F-4's ceiling one level out."
-```
 
 ---
 
-### Task 7: Rewrite the prose that tells the operator to type (SK-135)
+### Task 6: Rewrite the prose that tells the operator to type (SK-135)
 
 **Files:**
 - Create: `skills/supskill/references/stop-classes.md`
@@ -1089,7 +1089,7 @@ Recorded as a precondition, not a mechanism - F-4's ceiling one level out."
 - Modify: `tests/test_execute_prose.py` or create `tests/test_stop_prose.py`
 
 **Interfaces:**
-- Consumes: `stop_classes.STOPS` from Task 1; the verbs from Tasks 2–6.
+- Consumes: `stop_classes.STOPS` from Task 1; the verbs from Tasks 2–5.
 - Produces: nothing importable. This is the conductor-facing half.
 
 - [ ] **Step 1: Write the failing prose test**
@@ -1149,7 +1149,7 @@ Four edits, each replacing "tell the operator to type it" with "do it and record
 3. **Gate 3's `artifact-guard` paragraph** — on exit 1, run `guard_conductor_commit` over the untracked recorded artifact paths; if clean, stage and commit exactly those paths, then `action --stop artifact-guard.untracked --command "<the exact git line>" --sha <sha>`. If the guard reports foreign paths, relay and stop.
 4. **Gate 3's Shape-1 row** — after the writeback, commit exactly the backlog path written, then record the action.
 
-Add one line to the run checklist's preflight step: before the first action of a run, confirm a non-empty operator answer has been received this run (SK-136); if not, relay `preflight.interactive_refusal`'s text and stop.
+Every `action` call in the prose above passes `--operator-answered`, and the prose says why: the flag attests that a real, non-empty answer came back from an operator this run (SK-136). Add one line to the run checklist stating that a run which has not received one does not take remediable actions — `action` refuses without the flag, and that refusal is relayed verbatim like any other.
 
 - [ ] **Step 5: Run the prose tests and the whole suite**
 
@@ -1172,7 +1172,7 @@ pins the prose against stop_classes.STOPS so the two cannot drift."
 
 ---
 
-### Task 8: Release 0.7.0 (process)
+### Task 7: Release 0.7.0 (process)
 
 **Files:**
 - Modify: `pyproject.toml`, `.claude-plugin/plugin.json`, `uv.lock`
@@ -1203,10 +1203,10 @@ Follow the runbook's "Update the installed plugin to a new release", then its "C
 
 ## Self-Review
 
-**Spec coverage.** §1 classification → Task 1. §2 `actions.jsonl` → Task 2. §3 `decide` → Task 3. §4 `--batched` → Task 4. §5 empty-answer rule → Task 6. §6 conductor commit guard → Task 5. §7 prose → Task 7. Testing section → the test steps in each task. No spec section is unimplemented.
+**Spec coverage.** §1 classification → Task 1. §2 `actions.jsonl` → Task 2. §3 `decide` → Task 3. §4 `--batched` → Task 4. §5 empty-answer rule → Task 2, as `record_action`'s `operator_answered` parameter (see divergence 3). §6 conductor commit guard → Task 5. §7 prose → Task 6. Testing section → the test steps in each task. No spec section is unimplemented.
 
-**Placeholders.** Three steps deliberately defer to existing code rather than restating it: Task 1 Step 3 (extract `build_parser` only if it does not exist), Task 3 Step 2 (copy `test_block.py`'s task-seeding helper), and Task 7 Step 3 (copy ids verbatim from `STOPS`). Each names the exact file to read and the exact thing to copy, and each is guarded by a test that fails if it is done wrong. These are directions to existing truth, not deferred decisions.
+**Placeholders.** Three steps deliberately defer to existing code rather than restating it: Task 3 Step 2 (copy `test_block.py`'s task-seeding helper) and Task 6 Step 3 (copy ids verbatim from `STOPS`). Each names the exact file to read and the exact thing to copy, and each is guarded by a test that fails if it is done wrong. These are directions to existing truth, not deferred decisions.
 
 **Type consistency.** `stop_classes.classify` / `verbs_covered` / `STOPS` / `Stop.stop_class` are used identically in Tasks 1, 2 and 7. `record_action(stop_id, command, *, result, sha, root)` matches its CLI caller. `record_decision(task_id, option, response, *, batched, root)` matches Task 4's `--batched` addition. `guard_conductor_commit(paths)` returns `list[str]`, matching `foreign_paths`. `_blocker_view` gains one parameter, and both call sites are updated in the same step.
 
-**Known ceiling.** Task 6 is a precondition, not a mechanism. It is labelled as such in the row, the docstring and the plan; no test claims more.
+**Known ceiling.** `operator_answered` records what the conductor attests, not what a human did — F-4's ceiling, which no design here removes. It is labelled as such in the docstring and the plan. What changed from the filed row is that forgetting it now raises and the claim is recorded per action, rather than the rule living only in conductor prose.
