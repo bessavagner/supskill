@@ -72,6 +72,13 @@ STOPS: tuple[Stop, ...] = (
         stop_class=EVIDENTIAL,
     ),
     Stop(
+        id="replan-guard.writeback-uncommitted",
+        verb="replan-guard",
+        condition="a Shape-1 backlog writeback this run applied is still uncommitted",
+        stop_class=REMEDIABLE,
+        action="commit exactly the backlog path the writeback wrote, and nothing else",
+    ),
+    Stop(
         id="replan-guard.north-star",
         verb="replan-guard",
         condition="the shape reads as a north-star reset (invariant 7)",

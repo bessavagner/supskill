@@ -18,13 +18,24 @@ specifically (`docs/plans/sprints/backlog-01/backlog.md:29-30`); `backlog.md`
 was never inside that boundary, and every prior sprint's delta pass has
 already edited it this way, by hand, in a `docs:` commit.
 
-After the writeback, commit exactly the backlog path just written —
-`git add backlog.md && git commit -m "docs: backlog delta from <sprint-id>'s replan"` —
-and name the resulting SHA (`git rev-parse HEAD`) in the Gate 3 report, so
-the operator can see the commit without re-deriving it. This is not an
-`action --stop ...` record: no stop fired here (Shape 1 is a direct edit,
-not a refusal), so `stop_classes.STOPS` names no id for it — the commit and
-its SHA in the report are the record.
+After the writeback, this is `replan-guard.writeback-uncommitted`
+([stop-classes.md](stop-classes.md)): a backlog writeback this
+run applied and has not yet committed. Check `backlog.md` against
+`guard_conductor_commit`'s denylist exactly as `artifact-guard.untracked`
+does ([stop-classes.md](stop-classes.md) has the invocation) — it never
+matches for a plain `backlog.md` path, but the check runs regardless, same
+as every other conductor commit. Clean → commit exactly the backlog path
+just written, nothing else:
+
+    git add backlog.md && git commit -m "docs: backlog delta from <sprint-id>'s replan"
+
+then record it, so this commit lands in `actions.jsonl` the same way the
+`artifact-guard` one does:
+
+    ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop replan-guard.writeback-uncommitted --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered
+
+Name the SHA in the Gate 3 report too, so the operator can see the commit
+without re-deriving it.
 
 ## Shape 2 — park at a live boundary
 

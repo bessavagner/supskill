@@ -33,6 +33,14 @@ any other stop.
 |---|---|---|---|
 | `init.archive.decided` | a different sprint is on disk and its G3 decision IS recorded | run `init <id> --archive`, carrying every operator flag forward verbatim | `action --stop init.archive.decided --command "<the exact init line>" --operator-answered` |
 | `artifact-guard.untracked` | a recorded artifact is untracked by git | stage and commit exactly the recorded artifact paths | `action --stop artifact-guard.untracked --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered` |
+| `replan-guard.writeback-uncommitted` | a Shape-1 backlog writeback this run applied is still uncommitted | commit exactly the backlog path the writeback wrote, and nothing else | `action --stop replan-guard.writeback-uncommitted --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered` |
+
+`replan-guard.writeback-uncommitted` is keyed to the existing `replan-guard`
+verb, not a new one — the same two-entries-one-verb shape `init` already
+uses (`init.archive.decided` / `init.archive.undecided`), split on class
+rather than on a fourth CLI verb `verbs_covered()` would otherwise have to
+carry. Its own row, with the exact commands: [Shape 1 in
+replan-shapes.md](replan-shapes.md).
 
 ### Checking a set of paths before the conductor commits
 
