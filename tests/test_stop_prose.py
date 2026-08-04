@@ -115,11 +115,27 @@ def test_evidential_stops_are_still_named_as_refusals():
 
 
 def test_skill_still_refuses_review_guard_stale_and_plan_guard_commits():
-    # both are evidential: acting on either destroys the signal it exists to raise
+    """Both are evidential: acting on either destroys the signal it exists to raise.
+
+    Scoped to the two paragraphs that carry the instruction, and asserting the negative.
+    Three bare substrings against the whole file proved nothing: "Relay the refusal
+    verbatim and stop" occurs in unrelated paragraphs, so the review-guard paragraph
+    could have been inverted to "regenerate the package yourself" with all three still
+    present - the most load-bearing evidential invariant on the branch, unpinned.
+    """
     text = SKILL.read_text(encoding="utf-8")
-    assert "review-guard" in text
-    assert "Relay the refusal verbatim and stop" in text
-    assert "plan-guard" in text
+
+    review = text[text.index("## The REVIEW stage") : text.index("## Gate 3")]
+    guard_sentence = review[review.index("review-guard") : review.index("\n\n", review.index("review-guard"))]
+    assert "Relay the refusal verbatim and stop" in guard_sentence
+    assert "do not regenerate the diff yourself" in guard_sentence
+    assert "action --stop" not in guard_sentence, "review-guard.stale is evidential; nothing is recorded"
+    assert "remediable" not in guard_sentence
+
+    head_guard = text[text.index("6. **The HEAD guard.**") : text.index("\n7. **Verify and audit the plan.**")]
+    assert "plan-guard --before" in head_guard
+    assert "Report the guard's message verbatim" in head_guard
+    assert "action --stop" not in head_guard, "plan-guard.commits is evidential; nothing is recorded"
 
 
 def test_the_operator_answer_rule_is_written_down_because_it_cannot_be_remembered():
