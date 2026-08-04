@@ -25,7 +25,7 @@
 
 Recorded here rather than by editing the backlog rows, per this project's convention.
 
-1. **SK-130 has three classes, not two.** The spec names *remediable* and *evidential*. The anti-drift test can only be total if every verb is classified, and several verbs (`show`, `config`, `root`) never stop at all. A third value `no_stop` makes coverage checkable instead of leaving unclassifiable verbs as silent exceptions.
+1. **SK-130 has three classes, not two.** The spec names *remediable* and *evidential*. The anti-drift test can only be total if every verb is classified, and several verbs (`show`, `config`, `worktree`) never stop at all. A third value `no_stop` makes coverage checkable instead of leaving unclassifiable verbs as silent exceptions.
 
 2. **SK-132 records the decision, not the resolution.** The spec says `show` should "derive resolution from the decision rather than inferring it from task status." Implementing that literally would reintroduce exactly what `blockers.py`'s module docstring warns against: *"a second verb that could move a blocker independently could also disagree with its task, and then Gate 3 would have two answers and no rule for picking one."* So `decide` records **which option was chosen**, and SK-103's derivation still decides **whether the blocker is resolved**. `derived.blockers.*` gains a `decision` field beside the existing `resolved_by`. One source per question: the trail says what was chosen, the task status says whether it settled.
 
@@ -217,7 +217,6 @@ STOPS: tuple[Stop, ...] = (
     ),
     Stop(id="show.none", verb="show", condition="reads only", stop_class=NO_STOP),
     Stop(id="config.none", verb="config", condition="reads or sets config", stop_class=NO_STOP),
-    Stop(id="root.none", verb="root", condition="prints the resolved root", stop_class=NO_STOP),
     Stop(id="artifact.none", verb="artifact", condition="records a path", stop_class=NO_STOP),
     Stop(id="gate.none", verb="gate", condition="records a decision", stop_class=NO_STOP),
     Stop(id="block.none", verb="block", condition="records a blocker", stop_class=NO_STOP),
