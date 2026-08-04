@@ -31,6 +31,10 @@ Recorded here rather than by editing the backlog rows, per this project's conven
 
 3. **SK-136 ships as a parameter of `record_action`, not a helper — and there is no Task for it.** As filed and as specified it was `preflight.interactive_refusal(answered)`, a boolean guard returning a constant string; the design doc already called it the epic's weakest part, and a review rubric would rightly flag a function that adds no behaviour. Decided with the operator before execution: `record_action` takes a keyword-only `operator_answered` with **no default**, refuses when it is false, and writes the attestation onto the row. A caller that forgets it raises; the CLI refuses without `--operator-answered`. A trail-derived check (require a prior non-empty gate or decision response this run) was designed and rejected: the first remediable action is the `init --archive` at run-checklist step 3, in a brand-new sprint before G1 exists, so it would block exactly the case the epic exists for. This remains conductor-attested — F-4's ceiling is not removable — but the refusal is now a mechanism and the claim is auditable per action. SK-131 and SK-136 are therefore one task (Task 2) with a two-story heading.
 
+5. **`STOPS` has three remediable ids, not two.** The design spec's remediable table listed the Shape-1 writeback commit alongside the archive and `artifact-guard`, but Task 1's code block only ever carried two — the writeback row was lost between spec and plan. Task 6 surfaced the consequence: the conductor commits to the operator's repository in exactly two places, and one of them would have produced no `actions.jsonl` row, which is precisely the hole SK-131 exists to close ("what did it do to my repo?", answerable from disk after the conversation is gone). Task 6's implementer correctly refused to invent an id `classify()` would reject at runtime and documented the gap inline instead; its reviewer independently confirmed the gap was real. Added as `replan-guard.writeback-uncommitted`, keyed to the existing `replan-guard` verb so `verbs_covered()` still matches the CLI exactly — the same two-entries-one-verb shape `init` already uses, split on class.
+
+6. **The run-checklist step-3 split keys on stage AND gate, not the gate alone.** The plan said: remediable when the on-disk sprint's `G3_review` is recorded, evidential when it is null. That is not the condition the code encodes. `_undecided_review_refusal` fires only when `stage is REVIEW and gates.G3_review is None`; a sprint resting at `SCOPE`, `PLAN` or `EXECUTE` also has a null `G3_review`, and `init --archive` over it **succeeds** — verified empirically. The plan's binary split therefore sent the conductor to "refuse and stop" in a case the CLI would have remediated: safe in direction (it reproduces the strictly-more-conservative pre-E10 behaviour of always refusing on id mismatch) but wrong as documentation, and a missed remediation in exactly the workflow this epic exists to remove. Corrected to: refuse only when `stage is REVIEW` **and** `G3_review` is null; every other id-mismatch archives and records. Found by Task 6's reviewer, reproduced by the controller, decided with the operator.
+
 4. **The decision row's discriminator is `row`, not `kind`.** The plan originally specified `{"kind": "decision", ...}`. Task 3's reviewer found — and the controller reproduced — that `blockers.jsonl` already uses `kind` for a blocker's own **free-text** classification (`--kind` has no allow-list; `Blocker.kind: str`). So `block --kind decision` writes a *blocker* row that satisfies the decision-row filter, and `record['option']` then raises `KeyError`, which `main()` does not catch — a raw traceback instead of a clean refusal, in a project whose posture is that refusals are clean and verbatim. Hardening the reader was rejected as a fix: Task 4's `_blocker_decisions` applies the same filter, so the collision would have to be defended against by every future reader. Renaming the discriminator fixes it once at the source. Decided with the operator when the finding was raised as plan-mandated; free to change because nothing has shipped and the branch is unreleased, so no trail needs migrating.
 
 ---
@@ -180,6 +184,13 @@ STOPS: tuple[Stop, ...] = (
         condition="a recorded artifact is untracked by git",
         stop_class=REMEDIABLE,
         action="stage and commit exactly the recorded artifact paths",
+    ),
+    Stop(
+        id="replan-guard.writeback-uncommitted",
+        verb="replan-guard",
+        condition="a Shape-1 backlog writeback this run applied is still uncommitted",
+        stop_class=REMEDIABLE,
+        action="commit exactly the backlog path the writeback wrote, and nothing else",
     ),
     Stop(
         id="review-guard.stale",
