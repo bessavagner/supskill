@@ -273,10 +273,11 @@ def render_show_json(root: Path | None = None) -> str:
         _blocker_plan_headings(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
     )
     notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
+    decisions = _blocker_decisions(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
     payload["derived"] = {
         "blockers": {
-            "open": [_blocker_view(b, headings, state.tasks, notes) for b in open_blockers],
-            "resolved": [_blocker_view(b, headings, state.tasks, notes) for b in resolved_blockers],
+            "open": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in open_blockers],
+            "resolved": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in resolved_blockers],
         }
     }
     return json.dumps(payload, indent=2) + "\n"
@@ -287,6 +288,7 @@ def _blocker_view(
     headings: dict[str, list[str]],
     tasks: list[Task],
     notes: dict[str, tuple[str, str | None]],
+    decisions: dict[str, dict],
 ) -> dict:
     """A `derived.blockers.*` entry: `blocker_to_dict` plus the plan headings it
     halted (SK-102) and, once resolved, the evidence of how (Important 3, final
@@ -311,14 +313,22 @@ def _blocker_view(
     this blocker. `blocker_to_dict` itself is the *state* serializer and stays
     unchanged; everything added here is read-time only (SK-103): state.json
     gains no such key.
+
+    `decision`/`batched` come from the blocker's own `decide` row (SK-132/SK-133),
+    unrelated to `resolved_by`: a blocker can be answered without yet being settled
+    (the task hasn't moved), which is exactly what makes them worth showing side by
+    side rather than folding one into the other.
     """
     status = blockers_view.resolving_status(blocker, tasks)
     _, note = notes.get(blocker.task, (None, None)) if status else (None, None)
+    decision = decisions.get(blocker.task)
     return {
         **blocker_to_dict(blocker),
         "plan_headings": headings.get(blocker.task, []),
         "resolved_by": status.value if status else None,
         "note": note,
+        "decision": decision["option"] if decision else None,
+        "batched": decision["batched"] if decision else False,
     }
 
 
@@ -374,6 +384,16 @@ def _blocker_plan_headings(root: Path | None, sprint_id: str) -> dict[str, list[
     return found
 
 
+def _blocker_decisions(root: Path, sprint_id: str) -> dict[str, dict]:
+    """task id -> its decision row, for blockers answered through `decide` (SK-132)."""
+    path = store.runs_dir(root) / normalize_sprint_id(sprint_id) / "blockers.jsonl"
+    found: dict[str, dict] = {}
+    for record in _jsonl_records(path):
+        if record.get("row") == "decision":
+            found[record["task"]] = record
+    return found
+
+
 def record_artifact(name: str, file_path: str, root: Path | None = None) -> State:
     root = store.resolve_root(root)
     if name not in ARTIFACT_KEYS:
@@ -388,7 +408,14 @@ def record_artifact(name: str, file_path: str, root: Path | None = None) -> Stat
     return state
 
 
-def record_gate(gate_id: str, decision: str, response: str, root: Path | None = None) -> State:
+def record_gate(
+    gate_id: str,
+    decision: str,
+    response: str,
+    *,
+    batched: bool = False,
+    root: Path | None = None,
+) -> State:
     root = store.resolve_root(root)
     if gate_id not in GATE_KEYS:
         raise StateError(f"unknown gate {gate_id!r}; expected one of {sorted(GATE_KEYS)}")
@@ -400,6 +427,7 @@ def record_gate(gate_id: str, decision: str, response: str, root: Path | None = 
         "gate": gate_id,
         "decision": decision,
         "response": response,  # verbatim; empty is accepted and recorded by design (F-4)
+        "batched": batched,  # SK-133: a bulk acceptance must not read as a considered one
         "at": store.now_utc_iso(),
     }
     store.append_jsonl(store.gates_path(root), record)  # trail FIRST

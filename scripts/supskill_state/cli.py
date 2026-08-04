@@ -121,11 +121,17 @@ def _add_gate(subparsers) -> None:
     sub.add_argument("--id", required=True, choices=["G1", "G2", "G3"], dest="gate_id")
     sub.add_argument("--decision", required=True, choices=["approved", "rejected", "replan"])
     sub.add_argument("--response", required=True, help="the operator's verbatim response (may be empty)")
+    sub.add_argument(
+        "--batched",
+        action="store_true",
+        help="this answer accepted several recommendations at once, rather than being reasoned "
+             "individually (SK-133)",
+    )
     sub.set_defaults(func=_cmd_gate)
 
 
 def _cmd_gate(args) -> int:
-    commands.record_gate(args.gate_id, args.decision, args.response)
+    commands.record_gate(args.gate_id, args.decision, args.response, batched=args.batched)
     print(f"recorded {args.gate_id}: {args.decision}")
     return 0
 
@@ -159,11 +165,17 @@ def _add_decide(subparsers) -> None:
     sub.add_argument("--task", required=True, dest="task_id", help="the blocked story id")
     sub.add_argument("--option", required=True, help="the chosen option's label, e.g. '(a)'")
     sub.add_argument("--response", required=True, help="the operator's answer, verbatim")
+    sub.add_argument(
+        "--batched",
+        action="store_true",
+        help="this answer accepted several recommendations at once, rather than being reasoned "
+             "individually (SK-133)",
+    )
     sub.set_defaults(func=_cmd_decide)
 
 
 def _cmd_decide(args) -> int:
-    commands.record_decision(args.task_id, args.option, args.response)
+    commands.record_decision(args.task_id, args.option, args.response, batched=args.batched)
     print(f"recorded decision: {args.task_id} chose {args.option}")
     return 0
 

@@ -137,3 +137,24 @@ def test_a_blocker_whose_free_text_kind_is_decision_does_not_masquerade_as_one(b
 
     decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
     assert [d["task"] for d in decisions] == ["SK-002"]
+
+
+def test_a_batched_decision_says_so(blocked):
+    record_decision("SK-001", "(a)", "go with your recommendations on all three", batched=True, root=blocked)
+
+    decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
+    assert decisions[0]["batched"] is True
+
+
+def test_show_json_surfaces_the_decision_beside_resolved_by(blocked):
+    import json as _json
+
+    from supskill_state.commands import render_show_json
+
+    record_decision("SK-001", "(a)", "go with a", root=blocked)
+
+    payload = _json.loads(render_show_json(root=blocked))
+    entry = payload["derived"]["blockers"]["open"][0]
+    assert entry["decision"] == "a"
+    assert entry["batched"] is False
+    assert entry["resolved_by"] is None  # answered, not settled

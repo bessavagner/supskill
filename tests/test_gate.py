@@ -110,3 +110,20 @@ def test_cli_gate_accepts_replan(tmp_path, monkeypatch):
     assert main(["init", "s1", "--backlog", "backlog.md"]) == 0
     assert main(["gate", "--id", "G3", "--decision", "replan", "--response", "shape 1: writeback"]) == 0
     assert load_state(state_path(tmp_path)).gates["G3_review"] == "replan"
+
+
+def test_a_gate_row_records_whether_it_was_batch_accepted(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_gate("G1", "approved", "all three, your recs", batched=True, root=tmp_path)
+
+    row = _gate_lines(tmp_path)[-1]
+    assert row["batched"] is True
+
+
+def test_an_individually_answered_gate_is_marked_not_batched(tmp_path):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_gate("G1", "approved", "approve", root=tmp_path)
+
+    assert _gate_lines(tmp_path)[-1]["batched"] is False
