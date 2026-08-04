@@ -22,7 +22,13 @@ everything from that file. Never rely on anything a previous conversation knew.
   plugin root — it is wiped on every plugin update.
 - **Never edit anything under `.supskill/` yourself.** Every mutation goes
   through a `supskill-state` verb. If the CLI refuses, report its message
-  verbatim and stop — never work around a refusal.
+  verbatim and stop — never work around a refusal, **except** where
+  [references/stop-classes.md](references/stop-classes.md) classifies that stop
+  as **remediable**. There, and only there, take exactly the action that file
+  names for it, then record it with `action --stop <id> --command "<the exact
+  command>" --operator-answered`. A stop the file does not list as remediable is
+  evidential: relay it verbatim and stop, whatever it looks like you could fix.
+  A remediable stop's refusal text is a report of what to do, not a hand-back.
 - **Pass `--archive` only to close a sprint whose G3 decision is recorded** (`init.archive.decided`) — never over one still open. A sprint resting at `REVIEW` with no `G3` decision is `init.archive.undecided`, and `init --archive` itself still refuses over it: archiving it would keep the question and lose the answer (SK-115). Every stop's class — which the conductor now acts on, which still refuses — is [references/stop-classes.md](references/stop-classes.md).
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
