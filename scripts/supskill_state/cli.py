@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_artifact(subparsers)
     _add_gate(subparsers)
     _add_block(subparsers)
+    _add_decide(subparsers)
     _add_task(subparsers)
     _add_tasks(subparsers)
     _add_advance(subparsers)
@@ -148,6 +149,22 @@ def _add_block(subparsers) -> None:
 def _cmd_block(args) -> int:
     commands.record_blocker(args.task_id, args.kind, args.found, args.options, args.recommend)
     print(f"recorded blocker on {args.task_id}; task is now BLOCKED")
+    return 0
+
+
+def _add_decide(subparsers) -> None:
+    sub = subparsers.add_parser(
+        "decide", help="record which option the operator chose for a recorded blocker"
+    )
+    sub.add_argument("--task", required=True, dest="task_id", help="the blocked story id")
+    sub.add_argument("--option", required=True, help="the chosen option's label, e.g. '(a)'")
+    sub.add_argument("--response", required=True, help="the operator's answer, verbatim")
+    sub.set_defaults(func=_cmd_decide)
+
+
+def _cmd_decide(args) -> int:
+    commands.record_decision(args.task_id, args.option, args.response)
+    print(f"recorded decision: {args.task_id} chose {args.option}")
     return 0
 
 

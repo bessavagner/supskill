@@ -492,6 +492,65 @@ def record_blocker(
     return state
 
 
+def record_decision(
+    task_id: str,
+    option: str,
+    response: str,
+    *,
+    batched: bool = False,
+    root: Path | None = None,
+) -> None:
+    """Record which option an operator chose for a blocker (SK-132).
+
+    This records the ANSWER, not the RESOLUTION. Whether the blocker is settled
+    stays `blockers.resolving_status`'s derivation from task status (SK-103): a
+    second independent mover could disagree with the task, and Gate 3 would then
+    have two answers and no rule for picking one.
+
+    `option` is matched against the blocker's own recorded options[] labels, so a
+    label the operator was never offered cannot be recorded as their choice.
+    """
+    root = store.resolve_root(root)
+    if not response.strip():
+        raise StateError("a decision requires a non-empty --response - an empty answer is not a decision (D4)")
+
+    state = store.load_state(store.state_path(root))
+    blocker = next((b for b in state.blockers if b.task == task_id), None)
+    if blocker is None:
+        raise StateError(f"no blocker recorded for task {task_id!r}")
+
+    match = _OPTION_LABEL.match(option)
+    if match is None:
+        raise StateError(f"--option must be a label like '(a)': {option!r}")
+    label = match.group(1)
+    offered = [_OPTION_LABEL.match(o).group(1) for o in blocker.options if _OPTION_LABEL.match(o)]
+    if label not in offered:
+        raise StateError(
+            f"option ({label}) was never offered for {task_id}; this blocker offers {offered}"
+        )
+
+    sprint_dir = normalize_sprint_id(state.sprint.id)
+    blockers_file = store.runs_dir(root) / sprint_dir / "blockers.jsonl"
+    for record in _jsonl_records(blockers_file):
+        if record.get("kind") == "decision" and record.get("task") == task_id:
+            raise StateError(
+                f"{task_id} was already decided as ({record['option']}); "
+                "the trail is append-only and a decision is not re-taken"
+            )
+
+    store.append_jsonl(
+        blockers_file,
+        {
+            "kind": "decision",
+            "task": task_id,
+            "option": label,
+            "response": response,
+            "batched": batched,
+            "at": store.now_utc_iso(),
+        },
+    )
+
+
 def load_tasks(
     doc: str,
     *,

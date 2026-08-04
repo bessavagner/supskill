@@ -94,6 +94,7 @@ STOPS: tuple[Stop, ...] = (
     Stop(id="artifact.none", verb="artifact", condition="records a path", stop_class=NO_STOP),
     Stop(id="gate.none", verb="gate", condition="records a decision", stop_class=NO_STOP),
     Stop(id="block.none", verb="block", condition="records a blocker", stop_class=NO_STOP),
+    Stop(id="decide.none", verb="decide", condition="records a decision", stop_class=NO_STOP),
     Stop(id="task.none", verb="task", condition="records a status", stop_class=NO_STOP),
     Stop(id="advance.none", verb="advance", condition="validates a transition", stop_class=NO_STOP),
     Stop(id="package.none", verb="package", condition="records a package", stop_class=NO_STOP),
