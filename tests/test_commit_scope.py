@@ -126,3 +126,27 @@ def test_the_execute_dispatch_discipline_names_the_commit_scope_guard():
     section = text[start : text.index("\n### ", start + 1)]
     assert "commit-scope-guard" in section
     assert ".omc/" in section  # names the harness state it exists to catch
+
+
+def test_a_conductor_commit_that_would_stage_supskill_state_is_refused():
+    from supskill_state.commit_scope import guard_conductor_commit
+
+    foreign = guard_conductor_commit(
+        ["docs/sprints/backlog-01/backlog.md", ".supskill/state.json"]
+    )
+    assert foreign == [".supskill/state.json"]
+
+
+def test_a_conductor_commit_of_only_the_recorded_artifacts_is_allowed():
+    from supskill_state.commit_scope import guard_conductor_commit
+
+    assert guard_conductor_commit(
+        ["docs/sprints/backlog-01/sprint-s9.md", "docs/superpowers/plans/2026-08-04-sprint-s9.md"]
+    ) == []
+
+
+def test_the_conductor_guard_uses_the_same_denylist_as_the_task_guard():
+    from supskill_state.commit_scope import guard_conductor_commit
+
+    for prefix in FOREIGN_PREFIXES:
+        assert guard_conductor_commit([f"{prefix}x"]) == [f"{prefix}x"]

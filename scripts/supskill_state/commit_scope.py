@@ -78,6 +78,18 @@ def git_changed_paths(root: str, before: str, after: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
+def guard_conductor_commit(paths: Iterable[str]) -> list[str]:
+    """The foreign paths among a set the CONDUCTOR is about to stage (SK-134).
+
+    `foreign_paths` inspects a committed range, which is right for a task's
+    implementer: the commits already exist and REVIEW will see them. A conductor
+    commit is checked before it lands, so the input is the staged set instead.
+    The denylist is shared - the actor that gains the most reach under E10 must
+    not be the one the guard exempts.
+    """
+    return foreign_paths(paths)
+
+
 def refusal(foreign: list[str], before: str, after: str) -> str:
     """What the conductor reports, verbatim, when a task's commits carry foreign state."""
     if not foreign:
