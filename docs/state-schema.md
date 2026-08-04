@@ -75,10 +75,13 @@ CLI ids map one-to-one onto state keys:
 | `G2`   | `G2_plan`      | `advance --to EXECUTE`|
 | `G3`   | `G3_review`    | (E6's replan verbs)   |
 
-`gates.jsonl` records `{gate, decision, response, at}` per decision, where
-`gate` is the CLI id, `decision` is `approved|rejected`, `response` is the
-operator's verbatim words (an **empty response is accepted and recorded** -
-the audit trail's job is to make a fabricated approval readable, F-4), and
+`gates.jsonl` records `{gate, decision, response, batched, at}` per decision,
+where `gate` is the CLI id, `decision` is `approved|rejected|replan`,
+`response` is the operator's verbatim words (an **empty response is accepted
+and recorded** - the audit trail's job is to make a fabricated approval
+readable, F-4), `batched` says whether that one answer accepted several
+recommendations at once rather than being reasoned individually (SK-133;
+`show` prints it and `show --json` carries it under `derived.gates`), and
 `at` is aware-UTC ISO-8601.
 
 ## Costs
