@@ -9,6 +9,7 @@ import json
 
 import pytest
 
+from supskill_state import stop_classes
 from supskill_state.commands import init_sprint, record_action
 from supskill_state.errors import StateError
 from supskill_state.store import require_aware_utc_iso, runs_dir, state_path
@@ -174,4 +175,52 @@ def test_the_consent_refusal_does_not_claim_the_action_was_not_executed(tmp_path
     text = str(refusal.value)
     assert "nothing was executed" not in text.lower()
     assert "unrecorded" in text
+    assert _actions(tmp_path) == []
+
+
+def _remediable_ids():
+    return [s.id for s in stop_classes.STOPS if s.stop_class == stop_classes.REMEDIABLE]
+
+
+def _non_remediable_ids():
+    return [s.id for s in stop_classes.STOPS if s.stop_class != stop_classes.REMEDIABLE]
+
+
+@pytest.mark.parametrize("stop_id", _remediable_ids())
+def test_every_remediable_stop_dispatches_to_a_row_carrying_the_tables_own_reason(tmp_path, stop_id):
+    """I8: runtime dispatch total over STOPS, not sampled at one hardcoded id.
+
+    replan-guard.writeback-uncommitted was added in the branch's final commit and
+    exercised by no test at all, while being a command the conductor types verbatim at
+    Gate 3. Parametrizing makes classify() -> record_action() proven for every id the
+    table calls remediable, and fails the moment a new one is added without a path
+    through this verb.
+    """
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    record_action(stop_id, "git commit -m 'docs: the action'", operator_answered=True, sha="abc1234", root=tmp_path)
+
+    row = _actions(tmp_path)[0]
+    assert row["stop"] == stop_id
+    assert row["reason"] == stop_classes.classify(stop_id).condition
+    assert row["operator_answered"] is True
+
+
+@pytest.mark.parametrize("stop_id", _non_remediable_ids())
+def test_every_stop_the_table_does_not_call_remediable_refuses_and_writes_nothing(tmp_path, stop_id):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    with pytest.raises(StateError, match="not remediable"):
+        record_action(stop_id, "git commit -m 'the action'", operator_answered=True, root=tmp_path)
+
+    assert _actions(tmp_path) == []
+
+
+@pytest.mark.parametrize("stop_id", _remediable_ids())
+def test_no_remediable_stop_is_recordable_without_the_operator_attestation(tmp_path, stop_id):
+    init_sprint("s10", backlog="backlog.md", root=tmp_path)
+
+    with pytest.raises(StateError, match="operator"):
+        record_action(stop_id, "git commit -m 'the action'", operator_answered=False, root=tmp_path)
+
     assert _actions(tmp_path) == []
