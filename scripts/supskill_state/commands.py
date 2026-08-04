@@ -194,7 +194,8 @@ def _archive_existing(root: Path) -> Path:
 def render_show(root: Path | None = None) -> str:
     root = store.resolve_root(root)
     state = store.load_state(store.state_path(root))
-    responses = _last_gate_responses(root)
+    gate_rows = _last_gate_rows(root)
+    responses = {key: row.get("response", "") for key, row in gate_rows.items()}
 
     slug = f" ({state.sprint.slug})" if state.sprint.slug else ""
     lines = [
@@ -213,6 +214,11 @@ def render_show(root: Path | None = None) -> str:
         line = f"  {cli_id} {key}: {decision}"
         if key in responses:
             line += f'  response: "{responses[key]}"'
+        # SK-133: a bulk acceptance is printed as one, so it is not read as a
+        # considered decision. Only the true case prints - a gate answered item by
+        # item says nothing extra.
+        if gate_rows.get(key, {}).get("batched"):
+            line += "  (batched)"
         lines.append(line)
 
     counts = Counter(task.status for task in state.tasks)
@@ -274,11 +280,22 @@ def render_show_json(root: Path | None = None) -> str:
     )
     notes = _last_task_notes(root, state.sprint.id) if resolved_blockers else {}
     decisions = _blocker_decisions(root, state.sprint.id) if (open_blockers or resolved_blockers) else {}
+    gate_rows = _last_gate_rows(root)
     payload["derived"] = {
         "blockers": {
             "open": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in open_blockers],
             "resolved": [_blocker_view(b, headings, state.tasks, notes, decisions) for b in resolved_blockers],
-        }
+        },
+        # SK-133: state.json records WHAT was decided; only the trail records whether
+        # one answer accepted a batch. Read-time like everything else under `derived` -
+        # state.json gains no key.
+        "gates": {
+            key: {
+                "decision": state.gates[key],
+                "batched": bool(gate_rows.get(key, {}).get("batched")),
+            }
+            for key in GATE_KEYS.values()
+        },
     }
     return json.dumps(payload, indent=2) + "\n"
 
@@ -352,13 +369,22 @@ def _jsonl_records(path: Path):
             yield record
 
 
-def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
-    responses: dict[str, str] = {}
+def _last_gate_rows(root: Path | None = None) -> dict[str, dict]:
+    """Each gate's last recorded row from gates.jsonl, keyed by state key.
+
+    Last wins, the same rule state.gates itself follows: a re-gated stage's newest
+    answer is the one `show` reports.
+    """
+    rows: dict[str, dict] = {}
     for record in _jsonl_records(store.gates_path(root)):
         key = GATE_KEYS.get(record.get("gate"))
         if key is not None:
-            responses[key] = record.get("response", "")
-    return responses
+            rows[key] = record
+    return rows
+
+
+def _last_gate_responses(root: Path | None = None) -> dict[str, str]:
+    return {key: row.get("response", "") for key, row in _last_gate_rows(root).items()}
 
 
 def _last_task_notes(root: Path | None, sprint_id: str) -> dict[str, tuple[str, str | None]]:

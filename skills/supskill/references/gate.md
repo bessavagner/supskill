@@ -21,6 +21,20 @@ three steps below are shared.
    (`scripts/supskill_state/commands.py:196-213`) — a fabricated approval
    must leave a readable, empty quote in the trail (F-4) — which is exactly
    why step 2's refusal lives here, in the conductor, and nowhere else.
+   **Say so when the answer was a bulk acceptance.** Add `--batched` to that
+   same `gate` call whenever one answer accepted several recommendations at
+   once instead of ruling on each item on its own terms. Offer the operator
+   that batch **only when every item in it carries a recommendation** — an item
+   with nothing recommended cannot be bulk-accepted, and its presence means the
+   question is answered item by item and the gate is not `--batched`. Gate 3's
+   question carries every open blocker, parked task, `DONE_WITH_CONCERNS` note
+   and high/actionable finding, so it is the gate this most often applies to;
+   the same flag and the same condition are on `decide` for a single blocker's
+   answer. Omit it and every row reads `batched: false`, and a ledger that
+   cannot tell a bulk acceptance from a considered one is lying quietly
+   (SK-109, SK-133). `show` prints it beside the gate's decision and
+   `show --json` carries it under `derived.gates`, so the two stay tellable
+   apart on disk after the conversation is gone.
 
 What happens after the decision is recorded is each gate's own — see Gate 1,
 Gate 2, or Gate 3 in `SKILL.md`.
