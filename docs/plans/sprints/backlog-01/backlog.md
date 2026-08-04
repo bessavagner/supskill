@@ -70,7 +70,8 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E7** | **Packaging & distribution** | Marketplace, trigger-only description, evals. | 9 | **S** |
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
-**Total: 136 pts for v1 (E1–E8, all shipped), plus 70 pts of E9 post-validation findings.**
+**Total: 136 pts for v1 (E1–E8, all shipped), plus 70 pts of E9 post-validation findings
+and 21 pts of E10 operator-interaction work.**
 Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure. E9 is the exception's proof: the real runs turned the
@@ -283,6 +284,55 @@ one because the only oracle is a local test run, one because a diff-scoped revie
 an absent mechanism. Neither was caught by the twelve task reviews that certified the work
 `DONE`; both were caught at PAR, one of them by a single reviewer of two, which is the
 strongest evidence the competitive frame has yet produced (F-5).
+
+## E10 — The operator decides, the conductor acts (21 pts)
+
+Design: [`docs/superpowers/specs/2026-08-04-operator-interaction-model-design.md`](../../../superpowers/specs/2026-08-04-operator-interaction-model-design.md).
+
+Every seam where supskill touches the operator today hands back a command to type.
+None of them needs the operator's hands — no elevated privilege, no knowledge the
+conductor lacks, no judgment it has not already made and recommended. They need the
+operator's *decision*. This epic separates the two: the decision stays human and
+recorded, the typing moves to the conductor. Filed from ledgerus s8/s9, where
+starting a sprint took two invocations, the sprint doc and dev plan stayed untracked
+until `artifact-guard` refused at Gate 3, and the Shape-1 writeback was left
+uncommitted by design.
+
+**Scope, settled before design.** State verbs plus `git add`/`git commit`. **Not**
+merge, **not** push, **not** model invocation — `disable-model-invocation: true`
+stays and E7's tension (`references/invocation-model.md`) stays open. Everything in
+scope is local and reversible: a wrong commit is a `git reset`, never something
+published. Only gates and blockers interrupt; everything else executes and is
+reported. Batch acceptance is allowed and marked.
+
+**The constraint this epic must carry.** F-4 says the script cannot prove a human
+answered a gate, and D4 records that `AskUserQuestion` auto-resolves **empty in
+~37ms** headless. Today the friction *is* the consent signal, because typing cannot
+auto-resolve. Today an empty answer costs a missing record; here it would cost an
+executed action nobody chose. SK-136 is that rule, and it is the weakest row in the
+epic — a precondition, not a mechanism.
+
+Numbering starts at SK-130 rather than SK-126: E9 is explicitly expected to keep
+growing, and interleaving two open epics in one id range makes the trail harder to
+read than a gap does.
+
+| ID | Story | Pts | Pri | Status |
+|---|---|---|---|---|
+| SK-130 | **Classify every stop as remediable or evidential, and pin it with a test.** Each stop the CLI can produce gets exactly one recorded label. *Remediable* (conductor acts): the id-mismatch refusal when the on-disk sprint's G3 **is** recorded; `artifact-guard`; a Shape-1 writeback this run just applied. *Evidential* (still refuses, relayed verbatim): `review-guard` — SK-104's point is that a regenerated package comes back *clean*, so the refusal **is** the finding; `plan-guard` — the plan agent committed, which is a misbehaving agent, not a fixable state; `commit-scope-guard`; `replan-guard --shape north-star-reset` (invariant 7); `preflight`; the `tasks` coverage refusal — a dropped story is a hole, not a chore; and `init --archive` over a sprint at REVIEW with no G3 (SK-115), where nothing can be remediated because no decision exists yet. `--archive` appearing in **both** tables, split on whether a decision exists to preserve, is the classification doing real work rather than restating a whitelist. **A test asserts every guard and refusal reachable from `cli.py` appears in the table exactly once** — without it this decays into per-run prose judgment, which is SK-108's failure mode across four runs and three contradictory readings. **Anchor of this epic — plan it first.** | 3 | M | ☐ |
+| SK-131 | **`actions.jsonl`: a durable record of what the conductor did on the operator's behalf.** New append-only per-run trail with one entry per conductor-executed action — kind, reason, the exact command, resulting SHA where there is one, outcome — written by a new `action` verb that only the conductor calls, the same posture as `cost`. Not optional bookkeeping: the scope decision makes these actions silent, and **invariant 5** says the conductor is disposable with `.supskill/` as its only memory, so a report delivered in a conversation `/clear` destroys is not a record. This is what keeps "what did it do to my repo?" answerable from disk after the conversation is gone. | 3 | M | ☐ |
+| SK-132 | **`decide` — give a blocker's answer a verb.** `decide --task SK-0xx --option "(a)" --response "<verbatim>"`, refusing an option label absent from that blocker's recorded `options[]` (reusing `_OPTION_LABEL`, `commands.py:411`), an empty `--response`, an unknown task, and a re-decide of a settled blocker — writing nothing on any refusal. `show` derives resolution from the decision instead of inferring it from task status. SK-103 deliberately shipped resolution as a derivation with no verb, reasoning that `task --status DONE --note` already records how a blocker was settled and "a second mover could disagree with it." That was right while the answer was free prose; it stops being right once the answer is a chosen option, because the chosen label is a recorded fact rather than an inference. SK-103's derivation stays as the fallback for blockers settled the old way. (ledgerus s9 settled three blockers whose trail records only `DONE`.) | 5 | M | ☐ |
+| SK-133 | **`--batched` on `gate` and `decide`.** Exactly SK-109's shape and exactly its reason: a ledger that cannot distinguish two provenances is lying quietly. `show` renders it, so a batch-accepted G3 and an individually-reasoned one are tellable apart. Batching is offered **only when every item in the batch carries a recommendation** — a question with no recommended answer cannot be bulk-accepted. (ledgerus s9: the operator answered three blockers with one "go with your recommendations on all three", which the trail cannot distinguish from three considered calls.) | 2 | M | ☐ |
+| SK-134 | **`commit-scope-guard` covers the conductor's own commits.** Today it guards an implementer's commits across a task's `BASE`..`HEAD` (SK-105, after a fix subagent swept `.omc/` into a commit). Every conductor-executed commit runs the same guard with the same refusal before it lands. The actor that gains the most reach under this epic must not be the one the guard exempts. | 3 | M | ☐ |
+| SK-135 | **Rewrite the prose that tells the operator to type.** The run checklist's step-3 refusal template, the SCOPE backlog-null refusal, Gate 3's `artifact-guard` paragraph, and the Conventions line **"Never pass `--archive`"** all change to match SK-130's classification. `--archive` becomes: pass it only to close a sprint whose G3 decision is recorded, and record the action. Downstream of SK-130 — the prose describes the table, so the table lands first. | 3 | M | ☐ |
+| SK-136 | **A run that cannot ask cannot act.** `record_gate` accepts an empty `--response` **by design** (`commands.py:402`: "empty is accepted and recorded by design (F-4)") so a fabricated approval leaves a readable empty quote in the trail; enforcing the empty-answer rule inside `gate` would destroy that mechanism. Enforce it one level up instead: before its first silent action of a run, the conductor establishes that an interactive operator exists, extending the run checklist's existing preflight step. A run that cannot raise a gate does not get to execute actions on the operator's behalf either. **Recorded as the weakest row in the epic**: it is a precondition backed by conductor discipline, not a mechanism that makes the failure impossible — F-4's ceiling restated one level out. | 2 | S | ☐ |
+
+**Sequencing.** SK-130 is the anchor and is planned first; SK-135 is its prose and
+must follow it. SK-131 and SK-132 are independent of each other and of the rest.
+SK-133 depends on SK-132 only for the `decide` half. SK-134 and SK-136 are
+independent. Nothing here may ship before SK-130, because every other row's
+behaviour is defined by which side of that table its stop falls on.
+
+---
 
 ---
 
