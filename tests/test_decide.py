@@ -55,7 +55,7 @@ def blocked(tmp_path, monkeypatch):
 def test_records_the_chosen_option_and_the_operator_response_verbatim(blocked):
     record_decision("SK-001", "(a)", "go with (a), the transport is the actual defect", root=blocked)
 
-    decisions = [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"]
+    decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
     assert len(decisions) == 1
     assert decisions[0]["task"] == "SK-001"
     assert decisions[0]["option"] == "a"
@@ -68,14 +68,14 @@ def test_refuses_an_option_label_the_blocker_never_offered(blocked):
     with pytest.raises(StateError, match="never offered"):
         record_decision("SK-001", "(c)", "go with c", root=blocked)
 
-    assert [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"] == []
+    assert [r for r in _blocker_rows(blocked) if r.get("row") == "decision"] == []
 
 
 def test_refuses_an_empty_response(blocked):
     with pytest.raises(StateError, match="--response"):
         record_decision("SK-001", "(a)", "   ", root=blocked)
 
-    assert [r for r in _blocker_rows(blocked) if r.get("kind") == "decision"] == []
+    assert [r for r in _blocker_rows(blocked) if r.get("row") == "decision"] == []
 
 
 def test_refuses_a_task_with_no_recorded_blocker(blocked):
@@ -110,3 +110,30 @@ def test_state_json_gains_no_key(blocked):
     before = state_path(blocked).read_bytes()
     record_decision("SK-001", "(a)", "go with a", root=blocked)
     assert state_path(blocked).read_bytes() == before
+
+
+def test_a_blocker_whose_free_text_kind_is_decision_does_not_masquerade_as_one(blocked):
+    """The discriminator must not collide with Blocker.kind's free text.
+
+    --kind has no allow-list (Blocker.kind: str), so a blocker legally recorded with
+    kind="decision" writes a row whose "kind" field is the string "decision". If the
+    decision row used "kind" as its own discriminator, record_decision's dedupe scan
+    would mistake that blocker row for a decision row and then KeyError on
+    record['option'] - a blocker row has "options" (plural), not "option". The
+    discriminator is "row", a key record_blocker never writes, so the two shapes
+    cannot collide.
+    """
+    _seed_one_task(blocked, "SK-002")
+    record_blocker(
+        "SK-002",
+        kind="decision",  # legal free text; --kind has no allow-list
+        found="a blocker that names itself decision",
+        options=["(a) x", "(b) y"],
+        recommend="(a) - because",
+        root=blocked,
+    )
+
+    record_decision("SK-002", "(a)", "go with a", root=blocked)  # must not raise KeyError
+
+    decisions = [r for r in _blocker_rows(blocked) if r.get("row") == "decision"]
+    assert [d["task"] for d in decisions] == ["SK-002"]

@@ -532,7 +532,7 @@ def record_decision(
     sprint_dir = normalize_sprint_id(state.sprint.id)
     blockers_file = store.runs_dir(root) / sprint_dir / "blockers.jsonl"
     for record in _jsonl_records(blockers_file):
-        if record.get("kind") == "decision" and record.get("task") == task_id:
+        if record.get("row") == "decision" and record.get("task") == task_id:
             raise StateError(
                 f"{task_id} was already decided as ({record['option']}); "
                 "the trail is append-only and a decision is not re-taken"
@@ -541,7 +541,7 @@ def record_decision(
     store.append_jsonl(
         blockers_file,
         {
-            "kind": "decision",
+            "row": "decision",
             "task": task_id,
             "option": label,
             "response": response,
