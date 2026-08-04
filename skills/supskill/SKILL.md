@@ -59,6 +59,8 @@ sprint resumes; `init` defaults it to the archived sprint's id).
 
 Copy this checklist into your response and check items off as you go. A run that has not received a real, non-empty answer from an operator this run takes no remediable action below — `action` refuses without `--operator-answered`, and that refusal is relayed verbatim like any other stop.
 
+**Where that answer comes from, and why this rule is written down rather than remembered.** A run may take a remediable action only after a real, non-empty answer has come back from an operator *in this run*: the `AskUserQuestion` answer at a gate or at a blocker question, or — at step 3, which precedes every gate — this invocation's own live request for a different sprint id. Nothing on disk records that a run reached an operator. `actions.jsonl` records the claim (`operator_answered`), never what made the claim true, so a conductor re-invoked after `/clear` cannot read the fact back and must not assume it: a resumed run has established nothing yet, whatever the trail shows, and re-establishes at the first gate or blocker question this checklist brings it to. Pass `--operator-answered` only for an answer you have just read yourself. Passing it on any other basis is a fabricated attestation — F-4's ceiling applies here exactly as it applies to a gate's recorded response: the CLI records what the conductor claims, not what a human did.
+
 1. **Read state.** Run:
    `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state show --json`
    - Refused with "no state file" → go to step 2 (matrix cell 1: init).

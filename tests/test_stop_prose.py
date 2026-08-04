@@ -65,3 +65,21 @@ def test_skill_still_refuses_review_guard_stale_and_plan_guard_commits():
     assert "review-guard" in text
     assert "Relay the refusal verbatim and stop" in text
     assert "plan-guard" in text
+
+
+def test_the_operator_answer_rule_is_written_down_because_it_cannot_be_remembered():
+    """I4: "an operator answered THIS RUN" has no on-disk representation.
+
+    Invariant 5 says the conductor is disposable, so knowledge with no disk
+    representation is a bug by definition. It cannot be given one here (divergence 3
+    rejected the trail-derived check: step 3's archive precedes G1), so the rule has
+    to survive /clear in prose instead - including the ceiling, so the flag is not
+    read as an observation.
+    """
+    text = SKILL.read_text(encoding="utf-8")
+    start = text.index("## The run checklist")
+    preamble = text[start : text.index("\n1. **Read state.**", start)]
+    assert "--operator-answered" in preamble
+    assert "/clear" in preamble  # the resume path the rule has to survive
+    assert "re-establishes" in preamble or "re-establish" in preamble
+    assert "F-4" in preamble  # attested, not observed
