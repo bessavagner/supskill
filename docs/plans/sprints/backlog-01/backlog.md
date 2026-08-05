@@ -71,7 +71,7 @@ The product is **the boundaries, the gates, and the escalation**. Not a methodol
 | **E8** | **Validation** | Earns its keep or does not ship. | 10 | **M** |
 
 **Total: 136 pts for v1 (E1–E8, all shipped), plus 70 pts of E9 post-validation findings
-and 28 pts of E10 operator-interaction work.**
+and 30 pts of E10 operator-interaction work.**
 Expect this to grow — every blinkebot sprint grew its committed points at DoR
 refinement, and there is no reason to believe this project is the exception. That growth is the
 process working, not a planning failure. E9 is the exception's proof: the real runs turned the
@@ -285,7 +285,7 @@ an absent mechanism. Neither was caught by the twelve task reviews that certifie
 `DONE`; both were caught at PAR, one of them by a single reviewer of two, which is the
 strongest evidence the competitive frame has yet produced (F-5).
 
-## E10 — The operator decides, the conductor acts (28 pts)
+## E10 — The operator decides, the conductor acts (30 pts)
 
 Design: [`docs/superpowers/specs/2026-08-04-operator-interaction-model-design.md`](../../../superpowers/specs/2026-08-04-operator-interaction-model-design.md).
 
@@ -331,6 +331,7 @@ read than a gap does.
 | SK-140 | `gate.none` and `decide.none` carry byte-identical `condition` text ("records a decision") in `stop_classes.STOPS`, describing two different verbs. Purely cosmetic — `id` is what `test_stop_ids_are_unique` asserts and what `classify()` dispatches on, and `condition` is documentation — but a reader skimming the table by condition alone would conflate the two verbs. (E10 final review, 2026-08-04.) | 1 | C | ☐ |
 | SK-141 | No test drives `_blocker_view`'s `decisions.get(...)` → `None` fallback through `render_show_json` — an open blocker with no `decide` call yet, asserting `decision: null` and `batched: false` come from the literal rather than a stored value. The E10 review filed this alongside an irony that its own I1 fix then removed: while `decide` had no caller, the fallback was the only branch that could execute in production. Now that Gate 3 instructs `decide`, both branches are live and the fallback is the untested one. (E10 final review, 2026-08-04; the stated rationale is recorded as superseded rather than repeated.) | 1 | C | ☐ |
 | SK-142 | `references/stop-classes.md` documents the eleven non-`no_stop` stops (3 remediable, 8 evidential — the review said nine, before its own fix wave added two), and its framing line ("every seam where `supskill-state` stops carries exactly one class") can read as implying those nine are all there is. Thirteen further verbs are classified `no_stop` in `stop_classes.STOPS` and appear nowhere in the reference. One line naming them, or naming the count, removes the misreading. No runtime consequence. (E10 final review, 2026-08-04.) | 1 | C | ☐ |
+| SK-143 | **E10 widened automatic archiving to cover half-finished sprints, and the Conventions line that said otherwise is gone.** Before E10 the run checklist's step 3 always refused on an id mismatch: the operator typed `init --archive` themselves, and the Conventions bullet read *"Archiving a half-finished sprint is an operator decision."* E10's step-3 fix — correct on its own terms, since `_undecided_review_refusal` fires only at `stage is REVIEW and G3 is None` and the prose was refusing where the CLI would have remediated — made every other state remediable. A sprint at `SCOPE`, `PLAN` or **`EXECUTE`** is now archived by the conductor with no question asked, because SK-115's refusal protects only the case where a *decision* is lost, not the case where *work in progress* is. Found on live turmarium, not in review: its `.supskill/` holds **B5 at EXECUTE with 6 DONE, one BLOCKED task and an open blocker**, and `/supskill run <new-id>` there would have closed it out silently. Nothing is destroyed — commits stay on the branch and `runs/<id>/*.jsonl` stays put — but the sprint's live state is retired without the operator ruling on it. Narrow the evidential branch: refuse when the on-disk sprint has any non-terminal task **or** any open blocker, not only when it rests at REVIEW with a null G3. Note this is a genuine regression introduced by E10, not a pre-existing gap, and it is consistent with the operator's own scope choice (gates and blockers interrupt; everything else is silent) — which is why it needs a mechanism rather than a reminder. (turmarium, 2026-08-04, immediately after the 0.7.0 install.) | 2 | M | ☐ |
 
 **Sequencing.** SK-130 is the anchor and is planned first; SK-135 is its prose and
 must follow it. SK-131 and SK-132 are independent of each other and of the rest.
