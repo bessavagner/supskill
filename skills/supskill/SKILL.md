@@ -29,7 +29,7 @@ everything from that file. Never rely on anything a previous conversation knew.
   command>" --operator-answered`. A stop the file does not list as remediable is
   evidential: relay it verbatim and stop, whatever it looks like you could fix.
   A remediable stop's refusal text is a report of what to do, not a hand-back.
-- **Pass `--archive` only to close a sprint whose G3 decision is recorded** (`init.archive.decided`) — never over one still open. A sprint resting at `REVIEW` with no `G3` decision is `init.archive.undecided`, and `init --archive` itself still refuses over it: archiving it would keep the question and lose the answer (SK-115). Every stop's class — which the conductor now acts on, which still refuses — is [references/stop-classes.md](references/stop-classes.md).
+- **Pass `--archive` only to close a sprint that is closed** (`init.archive.decided`) — never over one still live. Closed means a recorded `G3` decision, or nothing left running. A sprint with no `G3` decision that rests at `REVIEW`, holds a non-terminal task, or holds an open blocker is `init.archive.undecided`, and `init --archive` itself still refuses over it: archiving the first keeps the question and loses the answer (SK-115), and archiving the others retires work the operator never ruled on (SK-143). **The backlog is inherited, never retyped** — `init --archive` carries `backlog` forward from the sprint it archives, so a bare `/supskill run <new-id>` resumes against the path already on disk and you never supply one the operator did not type (SK-144). Every stop's class — which the conductor now acts on, which still refuses — is [references/stop-classes.md](references/stop-classes.md).
 - **Stage agents never touch state.** Stages dispatch subagents from templates
   under `references/`; the conductor runs every `supskill-state` call itself,
   and no template instructs an agent to run one or to write under `.supskill/`.
@@ -75,17 +75,24 @@ Copy this checklist into your response and check items off as you go. A run that
 3. **Compare ids.** Lowercase both the requested sprint id and `sprint.id`
    from the JSON.
    - Equal → this is a resume. Mutate nothing; continue at step 4.
-   - Different, and the on-disk sprint is **not** resting at `REVIEW` with `gates.G3_review` null — i.e. any other `stage`, or `stage` is `REVIEW` with `gates.G3_review` non-null — this is `init.archive.decided` ([references/stop-classes.md](references/stop-classes.md)): run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--backlog/--branch/--slug flag from this invocation, verbatim>` — never drop a flag the operator typed: an init that loses `--backlog` starts a sprint with `backlog: null`, which `replan-guard` refuses at Gate 3 — then `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop init.archive.decided --command "<the exact init line just run>" --operator-answered`. Then run `show --json` again and continue at step 4 — the JSON you read at step 1 described the sprint you just archived, and step 4 reports and step 6 dispatches on the sprint that exists **now** (invariant 5: never carry state across a mutation in your head).
-   - Different, and `stage` **is** `REVIEW` **and** `gates.G3_review` is null (`init.archive.undecided`) → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
+   - Different, and the on-disk sprint is **closed** — `gates.G3_review` is non-null (the operator ruled on it at Gate 3, blockers included), **or** it is not at `REVIEW` and every task is terminal (`DONE`/`DONE_WITH_CONCERNS`/`BLOCKED`/`PARKED`) with no open blocker — this is `init.archive.decided` ([references/stop-classes.md](references/stop-classes.md)): run `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--branch/--slug flag from this invocation, verbatim>` — never drop a flag the operator typed — then `${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state action --stop init.archive.decided --command "<the exact init line just run>" --operator-answered`. **Do not supply a `--backlog` the operator did not type:** `init` inherits it from the sprint being archived (SK-144), so a bare `/supskill run <new-id>` opens a SCOPE sprint against the backlog already on disk. Pass `--backlog` only when the operator typed one; a path you inferred is a target nobody authorized. Then run `show --json` again and continue at step 4 — the JSON you read at step 1 described the sprint you just archived, and step 4 reports and step 6 dispatches on the sprint that exists **now** (invariant 5: never carry state across a mutation in your head).
+   - Different, and the on-disk sprint is **still live** — `gates.G3_review` is null **and** (`stage` is `REVIEW`, **or** any task is non-terminal, **or** any blocker is open) — this is `init.archive.undecided` → refuse and stop. The refusal must name both ids, the flags you gave this invocation, and the operator's way forward, verbatim:
 
          A different sprint is already on disk: state.json holds <sprint.id>,
          you asked for <requested-id>. A half-finished sprint is never
          archived automatically. If you mean to close it out and start fresh, run:
-         ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--backlog/--branch/--slug flag from this invocation, verbatim>
+         ${CLAUDE_PLUGIN_ROOT}/scripts/supskill-state init <requested-id> --archive <every --entry/--branch/--slug flag from this invocation, verbatim>
 
-     Never drop a flag the operator typed: an init that loses `--backlog` starts
-     a sprint with `backlog: null`, which `replan-guard` refuses at Gate 3.
+     Never drop a flag the operator typed, and never add one they did not:
+     the backlog is inherited from the sprint being archived, not retyped.
      Do not run that command. Stop here.
+
+     Both halves matter. Keying on `REVIEW` and a null `G3` alone made every
+     other state silently archivable, which is how a sprint sitting at `EXECUTE`
+     with a `BLOCKED` task and an open blocker came within one command of being
+     retired mid-drain (SK-143). Keying on the gate alone sends you to refuse
+     where the CLI would have archived (SK-115). The CLI is the authority either
+     way: run the init and read what it says.
 4. **Report the resume surface.** From the same `show --json` output, report:
    the sprint id and slug, current `stage`, `sprint.entry`, each gate's
    decision (`null` = pending), each recorded artifact path, the `backlog`

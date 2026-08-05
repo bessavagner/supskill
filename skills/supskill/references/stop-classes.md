@@ -31,7 +31,7 @@ any other stop.
 
 | id | condition | action | recording it |
 |---|---|---|---|
-| `init.archive.decided` | a different sprint is on disk and its G3 decision IS recorded | run `init <id> --archive`, carrying every operator flag forward verbatim | `action --stop init.archive.decided --command "<the exact init line>" --operator-answered` |
+| `init.archive.decided` | a different sprint is on disk and it is closed: a G3 decision IS recorded, or nothing is left running | run `init <id> --archive`; the backlog is inherited from the sprint being archived, and every other operator flag is carried forward verbatim | `action --stop init.archive.decided --command "<the exact init line>" --operator-answered` |
 | `artifact-guard.untracked` | a recorded artifact is untracked by git | stage and commit exactly the recorded artifact paths | `action --stop artifact-guard.untracked --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered` |
 | `replan-guard.writeback-uncommitted` | a Shape-1 backlog writeback this run applied is still uncommitted | commit exactly the backlog path the writeback wrote, and nothing else | `action --stop replan-guard.writeback-uncommitted --command "<the exact git line>" --sha <the resulting commit SHA> --operator-answered` |
 
@@ -66,7 +66,7 @@ stop. That commit is not yours to make, and nothing is recorded.
 
 | id | condition |
 |---|---|
-| `init.archive.undecided` | the sprint on disk rests at REVIEW with no G3 decision (SK-115) |
+| `init.archive.undecided` | the sprint on disk is still live: no G3 decision, and it rests at REVIEW or holds a non-terminal task or an open blocker (SK-115, SK-143) |
 | `review-guard.stale` | HEAD moved past the recorded package, or none was recorded |
 | `plan-guard.commits` | the plan agent produced commits |
 | `commit-scope-guard.foreign` | a commit range swept foreign harness state in |
@@ -74,6 +74,15 @@ stop. That commit is not yours to make, and nothing is recorded.
 | `replan-guard.north-star` | the shape reads as a north-star reset (invariant 7) |
 | `preflight.unresolvable` | a skill a later stage dispatches will not resolve |
 | `tasks.coverage` | the dev plan does not cover the sprint doc's stories |
+
+`init.archive.undecided` covers two shapes under one class. SK-115's is a
+sprint at REVIEW whose Gate 3 decision was never recorded: archiving it keeps
+the question and loses the answer. SK-143's is a sprint still mid-flight —
+a non-terminal task, or a blocker nobody settled — which E10 made silently
+archivable by narrowing the refusal to the first shape alone. A recorded G3
+closes both, and that ordering is deliberate: `BLOCKED` is terminal, so a
+sprint can legally reach REVIEW carrying an open blocker its task can never
+resolve, and refusing after Gate 3 had ruled would strand it forever.
 
 Every one of these eight is a refusal the conductor relays and stops on —
 never a command it runs, never an `action` it records. Acting on any of
