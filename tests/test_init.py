@@ -5,8 +5,15 @@ import pytest
 from supskill_state.cli import main
 from supskill_state.commands import init_sprint
 from supskill_state.errors import StateError
-from supskill_state.model import Stage
-from supskill_state.store import gates_path, load_state, runs_dir, state_path, supskill_dir
+from supskill_state.model import Blocker, Stage, Task, TaskStatus
+from supskill_state.store import (
+    dump_state,
+    gates_path,
+    load_state,
+    runs_dir,
+    state_path,
+    supskill_dir,
+)
 
 
 def test_init_creates_state_gates_and_runs_dir(tmp_path):
@@ -246,3 +253,137 @@ def test_cli_init_accepts_continues(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     assert main(["init", "s6", "--entry", "EXECUTE", "--continues", "s5"]) == 0
     assert load_state(state_path(tmp_path)).sprint.continues == "s5"
+
+
+# --- SK-143: archiving a sprint whose work is still live ---
+
+
+def _live_sprint(tmp_path, *, stage, tasks, blockers=()):
+    """A sprint parked mid-flight, the way an operator's `.supskill/` actually looks."""
+    init_sprint("s5", backlog="backlog.md", root=tmp_path)
+    state = load_state(state_path(tmp_path))
+    state.stage = stage
+    state.tasks = [Task(id=i, seam="unit", provable="offline", status=s) for i, s in tasks]
+    state.blockers = [
+        Blocker(task=t, kind="ambiguity", found="mid-drain", options=["(a)", "(b)"], recommend="(a)")
+        for t in blockers
+    ]
+    dump_state(state, state_path(tmp_path))
+
+
+def test_archive_refuses_over_a_sprint_with_a_non_terminal_task(tmp_path):
+    # SK-143: E10 made every stage but REVIEW-with-null-G3 silently archivable
+    _live_sprint(tmp_path, stage=Stage.EXECUTE, tasks=[("SK-001", TaskStatus.PENDING)])
+    before = state_path(tmp_path).read_bytes()
+    with pytest.raises(StateError, match="still live") as excinfo:
+        init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path)
+    message = str(excinfo.value)
+    assert "s5" in message
+    assert "SK-001" in message  # names the work it would have retired
+    assert state_path(tmp_path).read_bytes() == before
+    assert not (runs_dir(tmp_path) / "s5" / "archive-1").exists()
+
+
+def test_archive_refuses_over_a_sprint_with_an_open_blocker(tmp_path):
+    # turmarium B5's exact shape: BLOCKED is terminal, so the task check alone misses it
+    _live_sprint(
+        tmp_path,
+        stage=Stage.EXECUTE,
+        tasks=[("SK-001", TaskStatus.DONE), ("SK-002", TaskStatus.BLOCKED)],
+        blockers=["SK-002"],
+    )
+    with pytest.raises(StateError, match="still live") as excinfo:
+        init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path)
+    assert "SK-002" in str(excinfo.value)
+    assert not (runs_dir(tmp_path) / "s5" / "archive-1").exists()
+
+
+def test_archive_proceeds_when_every_task_is_terminal_and_no_blocker_is_open(tmp_path):
+    _live_sprint(
+        tmp_path,
+        stage=Stage.EXECUTE,
+        tasks=[("SK-001", TaskStatus.DONE), ("SK-002", TaskStatus.DONE_WITH_CONCERNS)],
+        blockers=["SK-002"],  # resolved: its task reached a successful terminal status
+    )
+    state = init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path)
+    assert state.sprint.id == "s6"
+    assert (runs_dir(tmp_path) / "s5" / "archive-1" / "state.json").exists()
+
+
+def test_a_recorded_gate_three_closes_a_sprint_that_still_holds_an_open_blocker(tmp_path):
+    """The ordering that keeps SK-143 from stranding a sprint permanently.
+
+    BLOCKED is terminal, so `advance --to REVIEW` lets a sprint reach REVIEW carrying an
+    open blocker - and that blocker can never resolve afterwards, because resolution is
+    derived from its task's status and the task is already terminal. If an open blocker
+    outranked a recorded G3, that sprint could never be archived by any command, which
+    is a worse failure than the one SK-143 fixes. Gate 3 is the operator ruling on the
+    whole sprint, blockers included.
+    """
+    _live_sprint(
+        tmp_path,
+        stage=Stage.REVIEW,
+        tasks=[("SK-001", TaskStatus.BLOCKED)],
+        blockers=["SK-001"],
+    )
+    state = load_state(state_path(tmp_path))
+    state.gates["G3_review"] = "approved"
+    dump_state(state, state_path(tmp_path))
+
+    assert init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path).sprint.id == "s6"
+
+
+def test_a_parked_task_does_not_keep_a_sprint_live(tmp_path):
+    # PARKED is terminal: it names work that never ran, not work still running
+    _live_sprint(tmp_path, stage=Stage.EXECUTE, tasks=[("SK-001", TaskStatus.PARKED)])
+    assert init_sprint("s6", backlog="backlog.md", archive=True, root=tmp_path).sprint.id == "s6"
+
+
+# --- SK-144: the backlog crosses the archive ---
+
+
+def test_a_scope_entry_inherits_the_backlog_of_the_sprint_it_archives(tmp_path):
+    # a bare `/supskill run <new-id>` types no flags; the trail already holds the path
+    init_sprint("s5", backlog="docs/backlog.md", root=tmp_path)
+    state = init_sprint("s6", archive=True, root=tmp_path)
+    assert state.backlog == "docs/backlog.md"
+    assert state.sprint.id == "s6"
+    assert load_state(state_path(tmp_path)).backlog == "docs/backlog.md"
+
+
+def test_an_explicit_backlog_wins_over_the_inherited_one(tmp_path):
+    init_sprint("s5", backlog="docs/backlog.md", root=tmp_path)
+    state = init_sprint("s6", archive=True, backlog="docs/backlog-02.md", root=tmp_path)
+    assert state.backlog == "docs/backlog-02.md"
+
+
+def test_a_scope_entry_over_a_sprint_with_no_backlog_still_refuses(tmp_path):
+    # inheritance carries a recorded path; it never invents one
+    init_sprint("s5", entry="EXECUTE", root=tmp_path)
+    before = state_path(tmp_path).read_bytes()
+    with pytest.raises(StateError, match="--backlog"):
+        init_sprint("s6", archive=True, root=tmp_path)
+    assert state_path(tmp_path).read_bytes() == before
+    assert not (runs_dir(tmp_path) / "s5" / "archive-1").exists()
+
+
+def test_a_scope_entry_over_an_unreadable_state_still_refuses(tmp_path):
+    supskill_dir(tmp_path).mkdir(parents=True)
+    state_path(tmp_path).write_text("{corrupted")
+    with pytest.raises(StateError, match="--backlog"):
+        init_sprint("s6", archive=True, root=tmp_path)
+    assert state_path(tmp_path).read_text() == "{corrupted"  # archived by nothing, destroyed by nothing
+
+
+def test_a_first_sprint_inherits_no_backlog(tmp_path):
+    with pytest.raises(StateError, match="--backlog"):
+        init_sprint("s1", root=tmp_path)
+    assert not supskill_dir(tmp_path).exists()
+
+
+def test_cli_a_bare_archive_init_carries_the_backlog_forward(tmp_path, monkeypatch, capsys):
+    # the ledgerus failure end to end: the operator typed `run s10` and nothing else
+    monkeypatch.chdir(tmp_path)
+    assert main(["init", "s5", "--backlog", "docs/backlog.md"]) == 0
+    assert main(["init", "s6", "--archive"]) == 0
+    assert load_state(state_path(tmp_path)).backlog == "docs/backlog.md"

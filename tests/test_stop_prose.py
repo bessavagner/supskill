@@ -50,25 +50,47 @@ def test_every_remediable_stop_has_a_prose_caller():
             assert f"action --stop {stop.id}" in prose, f"{stop.id} is remediable but nothing runs it"
 
 
-def test_skill_step_three_keys_on_stage_and_gate_the_way_the_code_does():
-    """I6: `_undecided_review_refusal` fires only when stage is REVIEW AND G3 is null.
-
-    Divergence 6: prose that keyed on the gate alone sent the conductor to "refuse and
-    stop" in cases the CLI would have archived. Correct today, and unprotected until
-    this test - the condition lives in two files and only one of them is executable.
-    """
+def _step_three_branches():
     text = SKILL.read_text(encoding="utf-8")
     start = text.index("3. **Compare ids.**")
     step_three = text[start : text.index("\n4. **", start)]
     branches = step_three.split("\n   - ")[1:]
     keyed = [b for b in branches if "init.archive.decided" in b or "init.archive.undecided" in b]
     assert len(keyed) == 2, "step 3 should split the id mismatch into exactly two branches"
-    for branch in keyed:
-        # both sides of the split state both halves of the condition, or the split has
-        # drifted back to keying on the gate alone
-        assert "REVIEW" in branch, branch
+    return step_three, keyed
+
+
+def test_skill_step_three_keys_on_liveness_the_way_the_code_does():
+    """I6: `_live_sprint_refusal` fires on every shape of a sprint nobody ruled on.
+
+    Divergence 6: prose that keyed on the gate alone sent the conductor to "refuse and
+    stop" in cases the CLI would have archived. SK-143 is the same defect inverted -
+    prose that keyed on REVIEW-and-null-G3 alone sent the conductor to *archive* a
+    sprint the CLI now refuses, which is how turmarium's B5 came within one command of
+    being retired mid-drain. The condition lives in two files and only one of them is
+    executable, so every clause of it is pinned here.
+    """
+    for branch in _step_three_branches()[1]:
+        # all three clauses on both sides of the split, or it has drifted back to
+        # keying on the gate alone (SK-115) or on REVIEW alone (SK-143)
         assert "gates.G3_review" in branch, branch
-        assert "null" in branch, branch
+        assert "REVIEW" in branch, branch
+        assert "terminal" in branch, branch
+        assert "blocker" in branch, branch
+
+
+def test_skill_step_three_does_not_demand_a_backlog_flag_the_operator_never_typed():
+    """SK-144: "carry every operator flag forward verbatim" has nothing to carry.
+
+    An operator who types `/supskill run s10` and nothing else gave no `--backlog`,
+    entry defaults to SCOPE, and `init` refuses SCOPE entry without one - so the bare
+    resume invariant 5 promises was impossible. The CLI now inherits the path from the
+    sprint it archives; this pins the prose to say so, because a template that still
+    reads "carry the operator's --backlog" sends the conductor looking for a flag that
+    does not exist and stops the run.
+    """
+    step_three = _step_three_branches()[0]
+    assert "inherit" in step_three.lower(), step_three
 
 
 def test_skill_no_longer_forbids_archive_outright():

@@ -22,6 +22,7 @@ from .model import (
     ENTRY_STAGES,
     GATE_DECISIONS,
     GATE_KEYS,
+    TERMINAL_STATUSES,
     Blocker,
     SprintInfo,
     Stage,
@@ -61,12 +62,6 @@ def init_sprint(
     scratch = derive_scratch(sprint_id)  # validates the id before any disk change
     normalized = normalize_sprint_id(sprint_id)
 
-    if entry_stage is Stage.SCOPE and not backlog:
-        raise StateError(
-            "a SCOPE-entry sprint has nothing to scope without a backlog: pass --backlog <path> "
-            "(no verb can set it after init; PLAN and EXECUTE entries may omit it)"
-        )
-
     if continues is not None:
         if not continues.strip():
             raise StateError("--continues needs a sprint id, not an empty string")
@@ -77,18 +72,38 @@ def init_sprint(
                 "resumes work on"
             )
 
+    # Everything below refuses before anything is archived or written. The backlog check
+    # moved here from above (SK-144): it can only run once the state being archived has
+    # been read, because that state is where an un-flagged backlog comes from.
     path = store.state_path(root)
+    existing = path.exists()
     inherited: str | None = None
-    if path.exists():
+    if existing:
         if not archive:
             raise StateError(
                 f"{path} already exists; pass --archive to archive the old run first "
                 "(prior state is never destroyed)"
             )
-        undecided = _undecided_review_refusal(path)
-        if undecided is not None:
-            raise StateError(undecided)
+        live = _live_sprint_refusal(path)
+        if live is not None:
+            raise StateError(live)
         inherited = _existing_sprint_id(path)
+        # SK-144: the backlog is project-scoped - it is the one top-level field of
+        # state.json outside `sprint` - so a sprint that archives another inherits it
+        # rather than making the operator retype a path the trail already holds. An
+        # explicit --backlog still wins, and no verb sets it after init: this resolves
+        # AT init, from disk. Without it a bare `/supskill run <new-id>` cannot open a
+        # SCOPE sprint at all, because step 3 has no operator flag to carry forward.
+        if backlog is None:
+            backlog = _existing_backlog(path)
+
+    if entry_stage is Stage.SCOPE and not backlog:
+        raise StateError(
+            "a SCOPE-entry sprint has nothing to scope without a backlog: pass --backlog <path> "
+            "(no verb can set it after init; PLAN and EXECUTE entries may omit it)"
+        )
+
+    if existing:
         _archive_existing(root)
     # SK-116: a PLAN- or EXECUTE-entry sprint that archives one is continuing it. Record
     # that rather than requiring the conductor to remember the flag - the row exists
@@ -122,7 +137,79 @@ def init_sprint(
     return state
 
 
-def _undecided_review_refusal(path: Path) -> str | None:
+def _live_sprint_refusal(path: Path) -> str | None:
+    """The refusal when archiving would retire a sprint nobody has ruled on.
+
+    One evidential stop (`init.archive.undecided`), two shapes. SK-115 is the first:
+    a sprint resting at REVIEW with Gate 3 open. SK-143 is the second, found on live
+    turmarium a day after 0.7.0 shipped - B5 sat at EXECUTE with six DONE, one BLOCKED
+    task and an open blocker, and E10's step-3 fix had made every state but the first
+    shape silently archivable. SK-115's refusal protects the case where a *decision* is
+    lost; nothing protected the case where *work in progress* is.
+
+    A recorded G3 decision closes both shapes, and that ordering is load-bearing rather
+    than incidental: BLOCKED is terminal, so a sprint can legally reach REVIEW carrying
+    an open blocker, and its blocker can never resolve afterwards (resolution is derived
+    from the task's status, and the task is terminal). Refusing on an open blocker after
+    Gate 3 had ruled would strand that sprint permanently - a worse failure than the one
+    this fixes. Gate 3 is the operator ruling on the whole sprint, blockers included.
+
+    Returns the refusal text, or None when there is nothing to refuse. An old state that
+    cannot be READ returns None: it is archived, never destroyed
+    (test_init_archives_unreadable_old_state_under_unknown), and refusing on a parse
+    error would turn that guarantee into its opposite.
+    """
+    try:
+        old = loads_state(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None  # unreadable old state: nothing to refuse, same rule as _archive_existing
+    if old.gates[GATE_KEYS["G3"]] is not None:
+        return None  # the operator ruled on this sprint at Gate 3
+    if old.stage is Stage.REVIEW:
+        return _undecided_review_refusal(old)
+    pending = [task.id for task in old.tasks if task.status not in TERMINAL_STATUSES]
+    open_blockers = [b.task for b in blockers_view.partition(old.blockers, old.tasks)[0]]
+    if not pending and not open_blockers:
+        return None
+    return _live_work_refusal(old, pending, open_blockers)
+
+
+def _live_work_refusal(old: State, pending: list[str], open_blockers: list[str]) -> str:
+    """SK-143: the sprint is mid-flight and no Gate 3 decision exists to close it."""
+    reasons = []
+    if pending:
+        reasons.append(f"{len(pending)} task(s) not terminal ({', '.join(pending)})")
+    if open_blockers:
+        reasons.append(f"{len(open_blockers)} open blocker(s) ({', '.join(open_blockers)})")
+    return (
+        f"sprint {old.sprint.id} is still live at {old.stage.value}: {' and '.join(reasons)}. "
+        "Archiving it now retires work the operator never ruled on.\n"
+        "Nothing would be destroyed - the commits stay on the branch and runs/<id>/*.jsonl "
+        "stays put - but a sprint's live state is not the conductor's to close. Only gates "
+        "and blockers interrupt a run; this is both of them at once.\n"
+        "Finish it, or rule on it, then re-run this init:\n"
+        "  supskill-state task --id <id> --status <DONE|DONE_WITH_CONCERNS|BLOCKED|PARKED> "
+        '--note "<what happened>"\n'
+        '  supskill-state decide --task <id> --option "<label>" --response "<verbatim>"\n'
+        "  supskill-state advance --to REVIEW\n"
+        "  supskill-state gate --id G3 --decision <approved|rejected|replan> "
+        '--response "<what you decided, verbatim>"\n'
+        "Nothing was archived and nothing was created; the sprint on disk is untouched.\n"
+        "This checks that the work reached a terminal state, not that it reached a good one."
+    )
+
+
+def _existing_backlog(path: Path) -> str | None:
+    """The outgoing sprint's backlog, or None if unreadable or unset (SK-144)."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        value = raw["backlog"]
+    except Exception:
+        return None  # an unreadable old state is archived, not refused; it just names nothing
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _undecided_review_refusal(old: State) -> str:
     """SK-115: the refusal when the outgoing sprint rests at REVIEW with G3 open.
 
     A sprint that reached REVIEW and never recorded a Gate 3 decision is the one
@@ -132,20 +219,12 @@ def _undecided_review_refusal(path: Path) -> str | None:
     holds G1 and G2 and no G3 - how that blocker was decided exists nowhere on
     disk. This is the append-only trail failing at the point it was built for.
 
-    Returns the refusal text, or None when there is nothing to refuse. An old
-    state that cannot be READ returns None: it is archived, never destroyed
-    (test_init_archives_unreadable_old_state_under_unknown), and refusing on a
-    parse error would turn that guarantee into its opposite.
-
     The ceiling: this checks that a decision was RECORDED, not that it was the
     right one. `gate --id G3 --decision approved --response "."` satisfies it.
+
+    Reachability (stage is REVIEW, G3 is null, the state parsed) is the caller's,
+    `_live_sprint_refusal`; this composes the text.
     """
-    try:
-        old = loads_state(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None  # unreadable old state: nothing to refuse, same rule as _archive_existing
-    if old.stage is not Stage.REVIEW or old.gates[GATE_KEYS["G3"]] is not None:
-        return None
     return (
         f"sprint {old.sprint.id} rests at REVIEW with no Gate 3 decision recorded. "
         "Archiving it now would keep the question and lose the answer.\n"

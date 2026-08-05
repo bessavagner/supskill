@@ -36,14 +36,23 @@ STOPS: tuple[Stop, ...] = (
     Stop(
         id="init.archive.decided",
         verb="init",
-        condition="a different sprint is on disk and its G3 decision IS recorded",
+        condition=(
+            "a different sprint is on disk and it is closed: a G3 decision IS recorded, "
+            "or nothing is left running"
+        ),
         stop_class=REMEDIABLE,
-        action="run init <id> --archive, carrying every operator flag forward verbatim",
+        action=(
+            "run init <id> --archive; the backlog is inherited from the sprint being "
+            "archived, and every other operator flag is carried forward verbatim"
+        ),
     ),
     Stop(
         id="init.archive.undecided",
         verb="init",
-        condition="the sprint on disk rests at REVIEW with no G3 decision (SK-115)",
+        condition=(
+            "the sprint on disk is still live: no G3 decision, and it rests at REVIEW "
+            "or holds a non-terminal task or an open blocker (SK-115, SK-143)"
+        ),
         stop_class=EVIDENTIAL,
     ),
     Stop(
